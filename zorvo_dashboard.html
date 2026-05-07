@@ -5155,36 +5155,36 @@
               <div id="tour-itinerary-preview" style="background:rgba(255,255,255,0.03); padding:15px; border-radius:12px; border:1px solid var(--border); display:none">
                 <h4 style="margin-bottom:10px; color:var(--accent)">Generated Itinerary</h4>
                 <div id="tour-timeline" style="margin-bottom:15px; font-size:13px; color:var(--muted); line-height:1.6"></div>
-                <button class="btn btn-whatsapp" onclick="sendTourWhatsApp()"><i class="fab fa-whatsapp"></i> Send to Client</button>
+                <button class="btn btn-primary" onclick="sendTourEmail()"><i class="fas fa-envelope"></i> Send to Client</button>
               </div>
             </div>
           </div>
 
-          <!-- WHATSAPP AUTOMATOR -->
+          <!-- EMAIL DRIP AUTOMATOR -->
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="fab fa-whatsapp"></i> WhatsApp Drip Automator</div>
+              <div class="card-title"><i class="fas fa-envelope"></i> Email Drip Automator</div>
             </div>
             <div class="card-body">
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px">
                 <div>
                   <label class="form-label">Target Lead</label>
-                  <select id="wa-drip-lead-select" class="form-input"></select>
+                  <select id="email-drip-lead-select" class="form-input"></select>
                 </div>
                 <div>
                   <label class="form-label">Delay (Days from now)</label>
-                  <input type="number" id="wa-drip-delay" class="form-input" value="1" min="1" max="30">
+                  <input type="number" id="email-drip-delay" class="form-input" value="1" min="1" max="30">
                 </div>
               </div>
               <label class="form-label">Message Content</label>
-              <textarea id="wa-drip-msg" class="form-input" style="height:80px; margin-bottom:15px" placeholder="Hi [Name], just checking in on the property..."></textarea>
-              <button class="btn btn-accent" onclick="scheduleWADrip()"><i class="fas fa-clock"></i> Schedule Follow-Up</button>
+              <textarea id="email-drip-msg" class="form-input" style="height:80px; margin-bottom:15px" placeholder="Hi [Name], just checking in on the property..."></textarea>
+              <button class="btn btn-accent" onclick="scheduleEmailDrip()"><i class="fas fa-clock"></i> Schedule Follow-Up</button>
               
               <h4 style="margin:20px 0 10px; font-size:12px; color:var(--muted); text-transform:uppercase">Scheduled Sequences</h4>
               <div class="table-responsive">
                 <table class="data-table">
                   <thead><tr><th>Lead</th><th>Delay</th><th>Message Snippet</th><th>Actions</th></tr></thead>
-                  <tbody id="wa-drip-body">
+                  <tbody id="email-drip-body">
                     <tr><td colspan="4" class="table-empty">No sequences scheduled</td></tr>
                   </tbody>
                 </table>
@@ -5220,17 +5220,17 @@
             </div>
           </div>
 
-          <!-- FOLLOW-UP GENERATOR -->
+          <!-- EMAIL FOLLOW-UP GENERATOR -->
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="fab fa-whatsapp"></i> Follow-Up Generator</div>
+              <div class="card-title"><i class="fas fa-envelope"></i> Email Follow-Up Generator</div>
             </div>
             <div class="card-body">
               <label class="form-label">Select Lead</label>
               <select id="ai-lead-select" class="form-input" style="margin-bottom:15px"></select>
               <label class="form-label">Context (Optional)</label>
               <textarea id="ai-lead-notes" class="form-input" style="height:80px; margin-bottom:15px" placeholder="e.g., they mentioned they like modern kitchens"></textarea>
-              <button class="btn btn-whatsapp" style="width:100%" onclick="generateGeminiFollowup()"><i class="fas fa-paper-plane"></i> Architect Message</button>
+              <button class="btn btn-primary" style="width:100%" onclick="generateGeminiFollowup()"><i class="fas fa-paper-plane"></i> Send Email</button>
               <div id="ai-lead-output" class="ai-output" style="margin-top:15px; display:none; max-height:300px; overflow-y:auto"></div>
             </div>
           </div>
@@ -5603,10 +5603,10 @@
             <div class="card-body">
               <div class="conn-item">
                 <div style="display:flex; align-items:center; gap:10px">
-                  <i class="fab fa-whatsapp" style="color:var(--green)"></i>
-                  <div style="font-size:12px; font-weight:700">WhatsApp API</div>
+                  <i class="fas fa-envelope" style="color:var(--accent)"></i>
+                  <div style="font-size:12px; font-weight:700">Resend Email API</div>
                 </div>
-                <div class="conn-status status-active">Connected</div>
+                <div class="conn-status status-active">Active</div>
               </div>
               <div class="conn-item">
                 <div style="display:flex; align-items:center; gap:10px">
@@ -5688,10 +5688,10 @@
             <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Connect your favorite tools to automate
               lead follow-ups and meeting scheduling.</div>
             <div class="int-grid">
-              <div class="int-card" onclick="toast('WhatsApp Integration Active')">
-                <div class="int-icon" style="color:#25D366"><i class="fab fa-whatsapp"></i></div>
+              <div class="int-card" onclick="toast('Email Integration Active')">
+                <div class="int-icon" style="color:var(--accent)"><i class="fas fa-envelope"></i></div>
                 <div class="int-info">
-                  <div class="int-nm">WhatsApp Communication</div>
+                  <div class="int-nm">Resend Email API</div>
                   <div class="int-st">Connected</div>
                 </div>
               </div>
@@ -5699,14 +5699,9 @@
             <div
               style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:20px;flex-wrap:wrap">
               <label class="check-wrap"><input type="checkbox" id="opt-email" checked onchange="saveOptions()"> <i
-                  class="fas fa-envelope"></i> Email
-                Alerts</label>
-              <label class="check-wrap"><input type="checkbox" id="opt-sms" checked onchange="saveOptions()"> <i
-                  class="fas fa-mobile-alt"></i> SMS
-                Notifications</label>
-              <label class="check-wrap"><input type="checkbox" id="opt-whatsapp" checked onchange="saveOptions()"> <i
-                  class="fab fa-whatsapp"></i>
-                WhatsApp Pre-fill</label>
+                  class="fas fa-envelope"></i> Email Alerts</label>
+              <label class="check-wrap"><input type="checkbox" id="opt-auto" checked onchange="saveOptions()"> <i
+                  class="fas fa-robot"></i> AI Automation Active</label>
             </div>
           </div>
         </div>
@@ -5728,7 +5723,7 @@
             placeholder="email@example.com"></div>
         <div class="form-group"><label class="form-label">Source</label><select class="form-input" id="nl-source">
             <option>Website</option>
-            <option>WhatsApp</option>
+            <option>Direct</option>
             <option>Zillow</option>
             <option>Referral</option>
             <option>Social</option>
@@ -5929,10 +5924,10 @@
       <div class="ss-section">
         <div class="ss-section-title"><i class="fas fa-bolt"></i> Quick Actions</div>
         <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px">
-          <button class="btn btn-whatsapp" style="flex-direction:column; padding:12px; height:auto; gap:4px"
-            onclick="ldWhatsApp()">
-            <i class="fab fa-whatsapp" style="font-size:20px"></i>
-            <span style="font-size:10px; font-weight:800">WhatsApp</span>
+          <button class="btn btn-primary" style="flex-direction:column; padding:12px; height:auto; gap:4px; background:linear-gradient(135deg,#c5a059,#b8965a); border:none"
+            onclick="ldEmail()">
+            <i class="fas fa-envelope" style="font-size:20px"></i>
+            <span style="font-size:10px; font-weight:800">Send Email</span>
           </button>
           <button class="btn btn-ghost"
             style="flex-direction:column; padding:12px; height:auto; gap:4px; border-color:var(--blue); color:var(--blue)"
@@ -6102,13 +6097,7 @@
           <div class="mkt-channel-card active"><i class="fab fa-facebook" style="color:#1877F2"></i>
             <div>Facebook Ad</div>
           </div>
-          <div class="mkt-channel-card active" onclick="toggleMktChannel(this, 'whatsapp')"><i class="fab fa-whatsapp" style="color:#25D366"></i>
-            <div>WhatsApp Blast</div>
-          </div>
-          <div class="mkt-channel-card active" onclick="toggleMktChannel(this, 'sms')"><i class="fas fa-mobile-alt" style="color:var(--blue)"></i>
-            <div>SMS Blast</div>
-          </div>
-          <div class="mkt-channel-card" onclick="toggleMktChannel(this, 'email')"><i class="fas fa-envelope" style="color:var(--accent)"></i>
+          <div class="mkt-channel-card active" onclick="toggleMktChannel(this, 'email')"><i class="fas fa-envelope" style="color:var(--accent)"></i>
             <div>Email Campaign</div>
           </div>
         </div>
@@ -6910,7 +6899,7 @@
           <div style="font-size:11px;color:var(--muted)">${b.property_name || '—'}</div>
         </div>
         <div class="visit-actions">
-          <button class="btn btn-whatsapp btn-sm" onclick="sendWhatsAppConfirmation('${b.id}')">💬 WhatsApp Chat</button><button class="btn btn-primary btn-sm" onclick="markVisitOutcome('${b.id}')">Outcome</button>
+          <button class="btn btn-primary btn-sm" onclick="sendEmailReminder('${b.id}')"><i class="fas fa-envelope"></i> Send Reminder</button><button class="btn btn-primary btn-sm" onclick="markVisitOutcome('${b.id}')">Outcome</button>
           <button class="btn btn-danger btn-sm" onclick="deleteBooking('${b.id}')" title="Delete Visit">🗑️</button>
         </div>
       </div>`;
@@ -6946,7 +6935,7 @@
     // SOURCE BADGE HELPER
     // ================================================================
     function getSourceBadge(source) {
-      const map = { Website: 'src-website', WhatsApp: 'src-whatsapp', Zillow: 'src-zillow', Referral: 'src-referral', Social: 'src-social' };
+      const map = { Website: 'src-website', Direct: 'src-other', Zillow: 'src-zillow', Referral: 'src-referral', Social: 'src-social' };
       const cls = map[source] || 'src-other';
       return `<span class="src-badge ${cls}">${source || 'Other'}</span>`;
     }
@@ -7085,10 +7074,10 @@
       if (!l || !l.phone) { toast('No phone number.', true); return; }
       window.open('tel:' + l.phone, '_self');
     }
-    function ldWhatsApp() {
+    async function ldEmail() {
       const l = state.leads.find(x => x.id === currentLeadId);
-      if (!l || !l.phone) { toast('No phone number.', true); return; }
-      openWhatsApp(l.phone);
+      if (!l || !l.email) { toast('No email address for this lead.', true); return; }
+      await sendLeadEmail(l, 'followup');
     }
     async function ldSMS() {
       const l = state.leads.find(x => x.id === currentLeadId);
@@ -7109,11 +7098,7 @@
         toast('SMS Error: ' + e.message, true);
       }
     }
-    function ldEmail() {
-      const l = state.leads.find(x => x.id === currentLeadId);
-      if (!l || !l.email) { toast('No email address.', true); return; }
-      window.open(`mailto:${l.email}?subject=Property Update from ${state.settings.name}`, '_self');
-    }
+    // ldEmail is now defined above (replaces ldWhatsApp)
     function ldScheduleVisit() {
       const l = state.leads.find(x => x.id === currentLeadId);
       closeModal('leadDetail');
@@ -7212,7 +7197,7 @@
           <td data-label="Actions" onclick="event.stopPropagation()">
             <div style="display:flex; gap:10px; align-items:center">
               ${actionBtn}
-              <button class="btn btn-ghost btn-sm" style="width:32px; height:32px; padding:0" onclick="openWhatsApp('${l.phone || ''}')"><i class="fab fa-whatsapp"></i></button>
+              ${l.email ? `<button class="btn btn-ghost btn-sm" style="width:32px; height:32px; padding:0; color:var(--accent)" onclick="event.stopPropagation();sendLeadEmail({email:'${l.email}',name:'${l.name}',property_interest:'${l.property_interest||''}',budget:'${l.budget||''}'},'followup')" title="Send Email"><i class="fas fa-envelope"></i></button>` : ''}
               <button class="btn btn-danger btn-sm" style="width:32px; height:32px; padding:0" onclick="quickDeleteLead('${l.id}')"><i class="fas fa-trash-can"></i></button>
             </div>
           </td>
@@ -7363,7 +7348,7 @@
               </div>
               
               <div style="display:flex; gap:6px">
-                ${l.phone ? `<button class="btn btn-ghost" style="width:28px; height:28px; padding:0; border-radius:50%; color:#25D366; border-color:rgba(37,211,102,0.2)" onclick="event.stopPropagation();sendWhatsApp('${l.phone}','${l.name}')"><i class="fab fa-whatsapp"></i></button>` : ''}
+                ${l.email ? `<button class="btn btn-ghost" style="width:28px; height:28px; padding:0; border-radius:50%; color:var(--accent); border-color:rgba(197,160,89,0.2)" onclick="event.stopPropagation();sendLeadEmail({email:'${l.email}',name:'${l.name}',property_interest:'${l.property_interest||''}',budget:'${l.budget||''}'},'followup')" title="Send Email"><i class="fas fa-envelope"></i></button>` : ''}
                 <div class="score ${l.score >= 80 ? 'temp-hot' : l.score >= 50 ? 'temp-warm' : 'temp-cold'}" style="font-size:10px; padding:2px 8px; border-radius:10px; height:28px; display:flex; align-items:center">${l.score}%</div>
               </div>
             </div>
@@ -7884,8 +7869,8 @@
             </div>
             
             <div class="visit-actions">
-              <div class="action-pill" onclick="sendWhatsAppConfirmation('${b.id}')">
-                <i class="fab fa-whatsapp"></i> REMINDER
+              <div class="action-pill" onclick="sendEmailReminder('${b.id}')" title="Send email reminder">
+                <i class="fas fa-envelope"></i> REMINDER
               </div>
               <div class="action-pill" onclick="generateVisitKit('${b.id}')">
                 <i class="fas fa-file-pdf"></i> VISIT KIT
@@ -7914,24 +7899,63 @@
 
 
 
-    function sendWhatsAppConfirmation(id) {
+    async function sendEmailReminder(id) {
       const b = state.bookings.find(x => x.id === id);
-      if (!b || !b.client_phone) { toast('No client phone found.', true); return; }
+      if (!b || !b.client_email) { toast('No client email found for this booking.', true); return; }
 
       const agent = state.agent || {};
-      const agentName = agent.name || 'Sai Shiva';
+      const agentName = agent.name || 'Sarah Al-Rashid';
+      const agentEmail = agent.email || '';
       const agentPhone = agent.phone || '+971 50 123 4567';
+      const baseUrl = window.location.origin;
       const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(b.property_name + ' Dubai')}`;
 
-      const msg = `Hi ${b.client_name}, this is ${agentName}. Confirming our visit for today at ${b.visit_time}. Here is the property location: ${mapLink}`;
+      const subject = `⏰ Reminder: Your property visit for ${b.property_name} — Today at ${b.visit_time}`;
+      const message = `Hi ${b.client_name},\n\nThis is a reminder for your property visit today.\n\nProperty: ${b.property_name}\nDate: ${b.visit_date}\nTime: ${b.visit_time}\nLocation: ${mapLink}\n\nPlease arrive 5 minutes early. See you soon!\n\n${agentName}\n${agentPhone}\n${agentEmail}`;
+      const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
+        <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:28px 36px;border-bottom:2px solid #c5a059;text-align:center">
+          <h2 style="margin:0;color:#c5a059;font-weight:300;font-size:22px">⏰ Visit Reminder</h2>
+          <p style="margin:8px 0 0;color:rgba(255,255,255,0.45);font-size:13px">Your property tour is today</p>
+        </div>
+        <div style="padding:28px 36px">
+          <p style="color:#faf8f4;font-size:15px">Hi <strong>${b.client_name}</strong>,</p>
+          <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.7">This is a friendly reminder for your property visit scheduled for <strong style="color:#c5a059">today</strong>.</p>
+          <div style="background:rgba(197,160,89,0.07);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:16px;margin:16px 0">
+            <p style="margin:4px 0;font-size:13px;color:rgba(255,255,255,0.6)"><strong style="color:#faf8f4">📌 Property:</strong> ${b.property_name}</p>
+            <p style="margin:4px 0;font-size:13px;color:rgba(255,255,255,0.6)"><strong style="color:#faf8f4">📅 Date:</strong> ${b.visit_date}</p>
+            <p style="margin:4px 0;font-size:13px;color:rgba(255,255,255,0.6)"><strong style="color:#faf8f4">🕒 Time:</strong> ${b.visit_time}</p>
+          </div>
+          <div style="text-align:center;margin:20px 0">
+            <a href="${mapLink}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;font-size:13px">📍 View Location on Maps →</a>
+          </div>
+          <hr style="border:none;border-top:1px solid rgba(197,160,89,0.15);margin:20px 0">
+          <p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.5)">👤 <strong style="color:#faf8f4">${agentName}</strong></p>
+          <p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.5)">📞 <a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">${agentPhone}</a></p>
+          <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">📧 <a href="mailto:${agentEmail}" style="color:#c5a059;text-decoration:none">${agentEmail}</a></p>
+        </div>
+      </div>`;
 
-      const waLink = `https://wa.me/${b.client_phone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
-      window.open(waLink, '_blank');
-
-      DB.update(DB.BOOKINGS, id, { status: 'confirmed' });
-      state.bookings = DB.getAll(DB.BOOKINGS);
-      renderBookings();
-      toast('Reminder sent & visit confirmed!');
+      try {
+        const btn = event?.target?.closest('.action-pill, button');
+        if (btn) { btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; }
+        const res = await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: b.client_email, subject, message, html })
+        });
+        const data = await res.json();
+        if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+        if (data.success) {
+          toast(`📧 Reminder email sent to ${b.client_name}!`);
+          DB.update(DB.BOOKINGS, id, { status: 'confirmed' });
+          state.bookings = DB.getAll(DB.BOOKINGS);
+          renderBookings();
+        } else {
+          toast('Email failed: ' + (data.error || 'Unknown error'), true);
+        }
+      } catch (e) {
+        toast('Email error: ' + e.message, true);
+      }
     }
 
     // ================================================================
@@ -8063,7 +8087,7 @@
       document.getElementById('mkt-prev-img').src = p.images?.[0] || '';
     }
 
-    let mktSelectedChannels = ['instagram', 'facebook', 'whatsapp', 'sms'];
+    let mktSelectedChannels = ['instagram', 'facebook', 'email'];
 
     function toggleMktChannel(el, channel) {
       el.classList.toggle('active');
@@ -8415,7 +8439,7 @@
       document.getElementById('wa-elite-msg').value = msg;
     }
 
-    async function triggerEliteWAPulse() {
+    async function triggerEliteEmailPulse() {
       if (!activeEliteCampaign) { toast('Launch a campaign first.', true); return; }
       const wrap = document.getElementById('wa-pulse-progress-wrap');
       const bar = document.getElementById('wa-pulse-bar');
@@ -8425,7 +8449,7 @@
       wrap.style.display = 'block';
       status.textContent = 'Analyzing Network...';
 
-      const filter = document.getElementById('wa-elite-filter').value;
+      const filter = document.getElementById('email-elite-filter').value;
       const leads = state.leads.filter(l => {
         if (filter === 'Hot') return l.score >= 80;
         if (filter === 'Contacted') return l.status === 'Contacted';
@@ -8450,10 +8474,14 @@
         if (!lead.phone) { failed++; continue; }
 
         try {
-          const res = await fetch('/api/marketing/whatsapp-blast', {
+          const res = await fetch('/api/email', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: lead.phone, message: baseMsg.replace(/{name}/g, lead.name.split(' ')[0]) })
+            body: JSON.stringify({ 
+              to: lead.email, 
+              subject: `🏡 New Property Recommendation: ${prop.name}`,
+              message: baseMsg.replace(/{name}/g, lead.name.split(' ')[0]) 
+            })
           });
           const data = await res.json();
           if (data.success) {
@@ -9112,25 +9140,25 @@
     </div>`).join('');
     }
 
-    async function sendWhatsAppBlast() {
-      const filter = document.getElementById('wa-leads-filter')?.value || 'all';
+    async function sendEmailBlast() {
+      const filter = document.getElementById('email-leads-filter')?.value || 'all';
       const leads = filter === 'all' ? state.leads : state.leads.filter(l => l.status === filter);
-      const validLeads = leads.filter(l => Boolean(l.phone));
+      const validLeads = leads.filter(l => Boolean(l.email));
 
-      if (!validLeads.length) { toast('No valid leads with phone numbers to blast.', true); return; }
+      if (!validLeads.length) { toast('No valid leads with email addresses to blast.', true); return; }
       if (!confirm(`Are you sure you want to send this template to ${validLeads.length} leads automatically via API?`)) return;
 
-      const propId = document.getElementById('wa-prop-sel').value;
+      const propId = document.getElementById('email-prop-sel').value;
       const prop = propId ? state.properties.find(p => p.id === propId) : null;
       const a = state.agent;
-      const baseTmpl = document.getElementById('wa-message').value || 'Hi {name}, hope you are well! — {agent}';
+      const baseTmpl = document.getElementById('email-message').value || 'Hi {name}, hope you are well! — {agent}';
 
-      const btn = document.getElementById('btn-wa-blast');
+      const btn = document.getElementById('btn-email-blast');
       btn.disabled = true;
-      btn.innerText = 'Blasting... 🚀';
+      btn.innerText = 'Sending Emails... 🚀';
 
       for (const lead of validLeads) {
-        const statusEl = document.getElementById(`wa-status-${lead.id}`);
+        const statusEl = document.getElementById(`email-status-${lead.id}`);
         if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent)">Sending...</span>';
 
         const msg = baseTmpl.replace(/{name}/g, lead.name.split(' ')[0])
@@ -9139,10 +9167,14 @@
           .replace(/{agent}/g, a.name || 'Agent');
 
         try {
-          const res = await fetch('/api/whatsapp', {
+          const res = await fetch('/api/email', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
-            body: JSON.stringify({ to: lead.phone, message: msg })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              to: lead.email, 
+              subject: `🏡 Property Update: ${prop ? prop.name : 'Exclusive Listings'}`,
+              message: msg 
+            })
           });
           const data = await res.json();
           if (data.success) {
@@ -10139,8 +10171,6 @@ ${date}`;
     function saveOptions() {
       const opts = {
         email: document.getElementById('opt-email').checked,
-        sms: document.getElementById('opt-sms').checked,
-        whatsapp: document.getElementById('opt-whatsapp').checked,
         auto: document.getElementById('opt-auto').checked
       };
       DB.set('pe_opts', opts);
@@ -10149,7 +10179,6 @@ ${date}`;
 
     function triggerLeadAutomation(lead) {
       if (state.options.email) console.log(`[AUTO-EMAIL] To Agent: New Lead ${lead.name} received!`);
-      if (state.options.sms) console.log(`[AUTO-SMS] To Agent: New Lead ${lead.name} - ${lead.phone}`);
 
       const autoOn = localStorage.getItem('pe_auto_respond') === 'true';
 
@@ -10183,9 +10212,73 @@ ${date}`;
       return 'https://meet.google.com/' + code;
     }
 
-    function sendWhatsApp(phone, name) {
-      const msg = encodeURIComponent(`Hi ${name.split(' ')[0]}, I received your inquiry about a property on PropEdge. Let's schedule a visit!`);
-      window.open(`https://wa.me/${phone.replace(/\s/g, '').replace('+', '')}/?text=${msg}`, '_blank');
+    // sendWhatsApp → replaced by sendLeadEmail
+    async function sendLeadEmail(lead, type = 'followup') {
+      if (!lead?.email) { toast('No email address for this lead.', true); return; }
+      const agent = state.agent || {};
+      const agentName = agent.name || 'Sarah Al-Rashid';
+      const agentEmail = agent.email || '';
+      const agentPhone = agent.phone || '+971 50 123 4567';
+      const companyName = agent.agency_name || 'Zorvo Realty';
+      const baseUrl = window.location.origin;
+
+      const props = (state.properties || []).filter(p =>
+        ['available','Available','active','Active'].includes(p.status) || !p.status
+      ).slice(0, 6);
+
+      const propCards = props.length ? props.map((p,i) => {
+        const link = `${baseUrl}/index.html#property-${p.id || (i+1)}`;
+        const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name||'Property')+' '+(p.location||''))} `;
+        return `<tr><td style="padding:12px 0;border-bottom:1px solid rgba(197,160,89,0.12)">
+          <p style="margin:0 0 3px;font-size:14px;font-weight:700;color:#faf8f4">${p.name||p.title||'Property'}</p>
+          <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.45)">${p.property_type||'Property'} · 📍 ${p.location||'Prime Location'}</p>
+          <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#c5a059">${p.price_label||('$'+p.price)||'Contact for Price'}</p>
+          <a href="${link}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:6px 14px;border-radius:4px;text-decoration:none;font-size:11px;font-weight:700;margin-right:6px">View →</a>
+          <a href="${maps}" style="display:inline-block;border:1px solid rgba(197,160,89,0.4);color:#c5a059;padding:6px 10px;border-radius:4px;text-decoration:none;font-size:11px">📍 Map</a>
+        </td></tr>`;
+      }).join('') : `<tr><td style="color:rgba(255,255,255,0.4);padding:12px 0">Visit our website to browse all available properties.</td></tr>`;
+
+      const subject = type === 'followup'
+        ? `🏡 Following up on your property inquiry — ${companyName}`
+        : `📋 Property Information — ${companyName}`;
+
+      const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
+        <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:28px 36px;border-bottom:2px solid #c5a059;text-align:center">
+          <h2 style="margin:0;color:#c5a059;font-weight:300;font-size:22px">🏡 Property Follow-Up</h2>
+          <p style="margin:8px 0 0;color:rgba(255,255,255,0.45);font-size:13px">${companyName}</p>
+        </div>
+        <div style="padding:28px 36px">
+          <p style="color:#faf8f4;font-size:15px">Hi <strong>${lead.name||'there'}</strong>! 👋</p>
+          <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.7">I'm following up on your interest in ${lead.property_interest ? `<strong style="color:#c5a059">${lead.property_interest}</strong>` : 'our properties'}${lead.budget ? ` within your <strong style="color:#c5a059">${lead.budget}</strong> budget` : ''}. Here are our top available listings:</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">${propCards}</table>
+          <div style="text-align:center;margin:20px 0">
+            <a href="${baseUrl}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:700;font-size:14px">Browse All Properties →</a>
+          </div>
+          <hr style="border:none;border-top:1px solid rgba(197,160,89,0.15);margin:20px 0">
+          <p style="margin:0 0 3px;font-size:13px;color:rgba(255,255,255,0.5)">👤 <strong style="color:#faf8f4">${agentName}</strong></p>
+          <p style="margin:0 0 3px;font-size:13px"><a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">📞 ${agentPhone}</a></p>
+          <p style="margin:0;font-size:13px"><a href="mailto:${agentEmail}" style="color:#c5a059;text-decoration:none">📧 ${agentEmail}</a></p>
+        </div>
+      </div>`;
+
+      const message = `Hi ${lead.name||'there'},\n\nFollowing up on your interest in ${lead.property_interest||'our properties'}.\n\nBrowse all listings: ${baseUrl}\n\n${agentName}\n${agentPhone}\n${agentEmail}`;
+
+      try {
+        toast('Sending email…', false);
+        const res = await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: lead.email, subject, html, message })
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast(`📧 Email sent to ${lead.name||lead.email}!`);
+        } else {
+          toast('Failed: ' + (data.error?.message || data.error || 'Unknown error'), true);
+        }
+      } catch (e) {
+        toast('Email error: ' + e.message, true);
+      }
     }
 
     // ================================================================
@@ -10317,7 +10410,7 @@ ${date}`;
       }
     }
 
-    function openWhatsApp(phone) { const c = phone.replace(/\s/g, ''); if (c) window.open(`https://wa.me/${c.replace('+', '')}`, '_blank'); else toast('No phone number.', true); }
+    // openWhatsApp removed — use sendLeadEmail() instead
 
     // ================================================================
     // UI HELPERS
@@ -10590,7 +10683,7 @@ ${date}`;
           <td style="padding:10px 12px;font-size:12px">${a.property_name || '—'}</td>
           <td style="padding:10px 12px;font-size:12px;color:var(--muted)">${a.signed_at ? new Date(a.signed_at).toLocaleString() : '—'}</td>
           <td style="padding:10px 12px">
-            <button class="btn btn-ghost btn-sm" onclick="sendWhatsApp('${a.signer_phone || ''}','${a.signer_name}')">💬 WhatsApp</button>
+            ${a.signer_email ? `<button class="btn btn-ghost btn-sm" onclick="sendLeadEmail({email:'${a.signer_email}',name:'${a.signer_name}',property_interest:'${a.property_name||''}'},'followup')" title="Send Email"><i class="fas fa-envelope"></i> Email</button>` : '<span style="color:var(--muted);font-size:11px">No email</span>'}
           </td>
         </tr>`).join('') +
         '</tbody></table>';
@@ -11011,39 +11104,53 @@ ${date}`;
       window._currentTourLeadPhone = lead.phone;
     }
 
-    function sendTourWhatsApp() {
-      if(!window._currentTourLeadPhone) return toast('Lead has no phone number', true);
-      const msg = encodeURIComponent(`Hi! Here is your custom property tour itinerary for our upcoming viewings. 🚗💨 Click here for the Google Maps route: ${window._currentTourMapLink}`);
-      window.open(`https://wa.me/${window._currentTourLeadPhone.replace(/\D/g, '')}?text=${msg}`, '_blank');
-      toast('Opening WhatsApp...');
+    async function sendTourEmail() {
+      const l = state.leads.find(x => x.id === currentLeadId);
+      if(!l || !l.email) return toast('Lead has no email address', true);
+      
+      const subject = `🚗 Your Custom Property Tour Itinerary — ${state.agent?.agency_name || 'Zorvo Realty'}`;
+      const message = `Hi ${l.name.split(' ')[0]}!\n\nHere is your custom property tour itinerary for our upcoming viewings.\n\nClick here for the Google Maps route: ${window._currentTourMapLink}\n\nSee you soon!\n\n${state.agent?.name}`;
+      
+      try {
+        const res = await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: l.email, subject, message })
+        });
+        const data = await res.json();
+        if(data.success) toast('Itinerary sent via Email! 📧');
+        else toast('Failed to send email', true);
+      } catch(e) {
+        toast('Email error', true);
+      }
     }
 
-    // WhatsApp Drip Logic
-    function scheduleWADrip() {
-      const leadId = document.getElementById('wa-drip-lead-select').value;
-      const delay = document.getElementById('wa-drip-delay').value;
-      const msg = document.getElementById('wa-drip-msg').value;
+    // Email Drip Logic
+    function scheduleEmailDrip() {
+      const leadId = document.getElementById('email-drip-lead-select').value;
+      const delay = document.getElementById('email-drip-delay').value;
+      const msg = document.getElementById('email-drip-msg').value;
       
       if(!leadId || !msg) return toast('Select lead and write a message.', true);
       const lead = state.leads.find(l => l.id === leadId);
 
-      let drips = DB.getAll('pe_wa_drips') || [];
+      let drips = DB.getAll('pe_email_drips') || [];
       drips.push({
         id: 'drip_' + Date.now(),
         lead_name: lead.name,
         delay: parseInt(delay),
         msg: msg
       });
-      DB.set('pe_wa_drips', drips);
+      DB.set('pe_email_drips', drips);
       
-      document.getElementById('wa-drip-msg').value = '';
-      toast(`Sequence scheduled for Day ${delay}! 🤖`);
-      renderWADrip();
+      document.getElementById('email-drip-msg').value = '';
+      toast(`Email sequence scheduled for Day ${delay}! 📧`);
+      renderEmailDrip();
     }
 
-    function renderWADrip() {
-      let drips = DB.getAll('pe_wa_drips') || [];
-      const body = document.getElementById('wa-drip-body');
+    function renderEmailDrip() {
+      let drips = DB.getAll('pe_email_drips') || [];
+      const body = document.getElementById('email-drip-body');
       if(!body) return;
       if(drips.length === 0) {
         body.innerHTML = '<tr><td colspan="4" class="table-empty">No sequences scheduled</td></tr>';
@@ -11054,16 +11161,16 @@ ${date}`;
           <td style="font-weight:600">${d.lead_name}</td>
           <td>Day ${d.delay}</td>
           <td style="color:var(--muted); font-style:italic">"${d.msg.substring(0,30)}..."</td>
-          <td><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteWADrip('${d.id}')"><i class="fas fa-trash"></i></button></td>
+          <td><button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteEmailDrip('${d.id}')"><i class="fas fa-trash"></i></button></td>
         </tr>
       `).join('');
     }
 
-    function deleteWADrip(id) {
-      let drips = DB.getAll('pe_wa_drips') || [];
+    function deleteEmailDrip(id) {
+      let drips = DB.getAll('pe_email_drips') || [];
       drips = drips.filter(d => d.id !== id);
-      DB.set('pe_wa_drips', drips);
-      renderWADrip();
+      DB.set('pe_email_drips', drips);
+      renderEmailDrip();
       toast('Sequence removed.');
     }
     
@@ -11116,7 +11223,8 @@ ${date}`;
           body: JSON.stringify({ lead, properties: props })
         });
         const data = await res.json();
-        out.innerHTML = `<div style="white-space:pre-wrap; font-size:13px; line-height:1.6">${data.script}</div>`;
+        out.innerHTML = `<div style="white-space:pre-wrap; font-size:13px; line-height:1.6">${data.script}</div>
+          <button class="btn btn-primary btn-sm" style="margin-top:10px" onclick="sendLeadEmail({email:'${lead.email}',name:'${lead.name}'}, 'followup')">Send this as Email</button>`;
       } catch (err) {
         out.innerHTML = '<div style="color:var(--red)">Failed to architect message.</div>';
       }

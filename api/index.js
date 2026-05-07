@@ -176,35 +176,207 @@ async function getLeadEmail(leadId) {
 
 async function triggerFailoverMessages(lead) {
   const { phone, name, id: leadId, email: leadEmailMeta } = lead;
-  if (!phone) return;
   
-  console.log(`📤 Triggering 3-channel failover messages for ${phone}`);
+  console.log(`📤 Triggering email failover for lead: ${name || phone}`);
   const leadName = name || 'there';
 
-  // 1. WhatsApp
-  try {
-    const { sendWhatsAppText } = require('../services/whatsapp');
-    const failoverMsg = `🏠 *${AGENT_NAME} — Real Estate*\n\nHi ${leadName}, I just tried calling you regarding your interest in our properties, but I couldn't connect. \n\nNo worries! I've received your inquiry and I'm reviewing the listings that match your criteria right now. I'll send you more details here shortly. \n\nFeel free to message me anytime! 😊`;
-    await sendWhatsAppText(phone, failoverMsg);
-  } catch (e) { console.error('Failover WA Error:', e.message); }
+  // ── Resolve lead email ────────────────────────────────────────────────────
+  const leadEmail = leadEmailMeta || (leadId ? await getLeadEmail(leadId) : null);
+  if (!leadEmail) {
+    console.warn(`⚠️  No email found for lead ${leadName} (${phone}) — skipping failover email`);
+    return;
+  }
 
-  // 2. SMS
+  // ── Fetch current properties for the email ────────────────────────────────
+  let properties = [];
   try {
-    await sendCallFailoverSMS(phone, leadName);
-  } catch (e) { console.error('Failover SMS Error:', e.message); }
-
-  // 3. Email
-  try {
-    const leadEmail = leadEmailMeta || (leadId ? await getLeadEmail(leadId) : null);
-    if (leadEmail) {
-      await sendEmail({
-        to: leadEmail,
-        subject: `Missed Call: Your Property Inquiry — Zorvo Realty`,
-        message: `Hi ${leadName},\n\nI just tried calling you but couldn't reach you. I'm currently reviewing properties that match your interest.\n\nI'll follow up with you on WhatsApp and Email shortly with the best options.\n\nBest regards,\n${AGENT_NAME}`,
-        html: `<div style="font-family:sans-serif;padding:20px;background:#f9f9f9;border-radius:8px"><h2>Missed Call</h2><p>Hi ${leadName},</p><p>I just tried calling you regarding your property inquiry but couldn't connect.</p><p>I am already reviewing properties that match your criteria and will send you more details shortly.</p><p>Best regards,<br>${AGENT_NAME}</p></div>`
-      });
+    const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+    if (snapshot && snapshot.data && snapshot.data.pe_properties) {
+      properties = typeof snapshot.data.pe_properties === 'string'
+        ? JSON.parse(snapshot.data.pe_properties)
+        : snapshot.data.pe_properties;
     }
-  } catch (e) { console.error('Failover Email Error:', e.message); }
+  } catch (e) { console.error('Error fetching properties for failover email:', e.message); }
+
+  // Filter available / active properties
+  const available = properties.filter(p =>
+    ['available', 'Available', 'active', 'Active'].includes(p.status) || !p.status
+  );
+
+  const BASE_URL  = process.env.BASE_URL  || 'https://anizorvo.vercel.app';
+  const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
+  const companyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+
+  // ── Build property cards HTML ─────────────────────────────────────────────
+  const propertyCardsHtml = available.length > 0
+    ? available.map((p, i) => {
+        const propName     = p.name || p.title || `Property ${i + 1}`;
+        const propType     = p.property_type || p.type || 'Property';
+        const propLocation = p.location || 'Prime Location';
+        const propPrice    = p.price_label || p.price || 'Contact for Price';
+        const propBHK      = p.bhk || p.bedrooms || '';
+        const propFeatures = Array.isArray(p.features)
+          ? p.features.slice(0, 3).join(' · ')
+          : (p.features || '');
+        const propId       = p.id || (i + 1);
+        const propLink     = `${BASE_URL}/index.html#property-${propId}`;
+        const mapsLink     = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propName + ' ' + propLocation)}`;
+        return `
+          <tr>
+            <td style="padding:16px 0;border-bottom:1px solid rgba(197,160,89,0.15)">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td style="vertical-align:top">
+                    <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#faf8f4">
+                      ${propName}${propBHK ? ` — ${propBHK} BHK` : ''}
+                    </p>
+                    <p style="margin:0 0 6px;font-size:13px;color:rgba(255,255,255,0.5)">
+                      ${propType} · 📍 ${propLocation}
+                    </p>
+                    ${propFeatures ? `<p style="margin:0 0 8px;font-size:12px;color:rgba(255,255,255,0.38)">${propFeatures}</p>` : ''}
+                    <p style="margin:0 0 10px;font-size:17px;font-weight:700;color:#c5a059">${propPrice}</p>
+                    <table cellpadding="0" cellspacing="0" role="presentation">
+                      <tr>
+                        <td style="padding-right:8px">
+                          <a href="${propLink}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:7px 16px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:700;letter-spacing:0.5px">View Property →</a>
+                        </td>
+                        <td>
+                          <a href="${mapsLink}" style="display:inline-block;background:rgba(197,160,89,0.12);border:1px solid rgba(197,160,89,0.35);color:#c5a059;padding:7px 16px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:600">📍 Map</a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`;
+      }).join('')
+    : `<tr><td style="padding:20px 0;color:rgba(255,255,255,0.4);font-size:14px">We have a curated selection of premium properties matching your criteria. Please visit our website to explore them.</td></tr>`;
+
+  // ── Build rich HTML email ─────────────────────────────────────────────────
+  const subjectLine = `We tried calling you, ${leadName} — Here are the best properties for you 🏡`;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your Property Options — ${companyName}</title></head>
+<body style="margin:0;padding:0;background:#0a0e14;font-family:'Segoe UI',Arial,sans-serif">
+
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:#0a0e14;padding:24px 16px">
+  <tr>
+    <td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;width:100%;background:#111520;border-radius:16px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
+
+        <!-- HEADER -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#1a1a18 0%,#0f2044 100%);padding:36px 40px 28px;border-bottom:2px solid #c5a059;text-align:center">
+            <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.35);letter-spacing:3px;text-transform:uppercase">From ${companyName}</p>
+            <h1 style="margin:8px 0 0;color:#c5a059;font-size:26px;font-weight:300;letter-spacing:1px">🏡 Your Property Matches</h1>
+            <p style="margin:10px 0 0;color:rgba(255,255,255,0.5);font-size:14px">We tried calling you — here's everything you need</p>
+          </td>
+        </tr>
+
+        <!-- MISSED CALL NOTICE -->
+        <tr>
+          <td style="padding:28px 40px 0">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:rgba(197,160,89,0.07);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:20px">
+              <tr>
+                <td>
+                  <p style="margin:0 0 6px;font-size:18px;color:#faf8f4;font-weight:600">Hi ${leadName}! 👋</p>
+                  <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.7">
+                    I just tried calling you regarding your interest in our properties, but I wasn't able to reach you — no worries at all!
+                    I've put together a personalized selection of properties${lead.property_interest ? ` matching your interest in <strong style="color:#c5a059">${lead.property_interest}</strong>` : ''}
+                    ${lead.budget ? ` within your budget of <strong style="color:#c5a059">${lead.budget}</strong>` : ''}.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- PROPERTY LIST -->
+        <tr>
+          <td style="padding:28px 40px 0">
+            <p style="margin:0 0 16px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">✨ Handpicked For You</p>
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+              ${propertyCardsHtml}
+            </table>
+          </td>
+        </tr>
+
+        <!-- CTA BUTTON -->
+        <tr>
+          <td style="padding:28px 40px">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:24px;text-align:center">
+              <tr>
+                <td>
+                  <p style="margin:0 0 6px;font-size:15px;color:#faf8f4;font-weight:600">Ready to schedule a visit?</p>
+                  <p style="margin:0 0 18px;font-size:13px;color:rgba(255,255,255,0.45)">Browse all listings and book your free property tour — zero pressure</p>
+                  <a href="${BASE_URL}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:1px">Browse All Properties →</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- AGENT DETAILS -->
+        <tr>
+          <td style="padding:0 40px 32px">
+            <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="border-top:1px solid rgba(197,160,89,0.15);padding-top:24px">
+              <tr>
+                <td style="vertical-align:top;padding-right:20px">
+                  <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">Your Personal Agent</p>
+                  <p style="margin:0 0 4px;font-size:17px;font-weight:700;color:#faf8f4">👤 ${AGENT_NAME}</p>
+                  <p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.5)">📞 <a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">${agentPhone}</a></p>
+                  <p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.5)">📧 <a href="mailto:${AGENT_EMAIL}" style="color:#c5a059;text-decoration:none">${AGENT_EMAIL}</a></p>
+                  <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">🏢 ${companyName}</p>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding-top:16px">
+                  <a href="${BASE_URL}" style="display:inline-block;margin-right:12px;font-size:12px;color:#c5a059;text-decoration:underline">🌐 Visit Our Website</a>
+                  <a href="mailto:${AGENT_EMAIL}" style="display:inline-block;font-size:12px;color:#c5a059;text-decoration:underline">✉️ Email Us</a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- FOOTER -->
+        <tr>
+          <td style="background:rgba(0,0,0,0.3);padding:16px 40px;text-align:center;border-top:1px solid rgba(255,255,255,0.05)">
+            <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2)">© ${new Date().getFullYear()} ${companyName} · <a href="${BASE_URL}" style="color:rgba(255,255,255,0.3);text-decoration:none">Unsubscribe</a></p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+
+  const plainText = `Hi ${leadName},\n\nI just tried calling you regarding your interest in our properties but wasn't able to reach you.\n\nHere is a selection of properties that match your criteria:\n\n${
+    available.slice(0, 6).map((p, i) =>
+      `${i+1}. ${p.name || p.title || 'Property'} — ${p.property_type || 'Property'} — ${p.location || 'N/A'} — ${p.price_label || p.price || 'Contact Agent'}\n   View: ${BASE_URL}/index.html#property-${p.id || (i+1)}`
+    ).join('\n\n') || 'Please visit our website to browse all available properties.'
+  }\n\nBook a free visit: ${BASE_URL}\n\nYour Agent:\n${AGENT_NAME}\n${agentPhone}\n${AGENT_EMAIL}\n${companyName}`;
+
+  try {
+    const result = await sendEmail({
+      to: leadEmail,
+      subject: subjectLine,
+      message: plainText,
+      html: htmlBody,
+    });
+    if (result.success) {
+      console.log(`✅ Failover email sent to ${leadEmail} (${leadName})`);
+    } else {
+      console.error(`❌ Failover email failed for ${leadEmail}:`, result.error);
+    }
+  } catch (e) {
+    console.error('Failover Email Exception:', e.message);
+  }
 }
 
 async function notifyAgent(agentEmail, { title, description, type, icon, emailSubject }) {
@@ -264,8 +436,11 @@ app.get('/api/integration-status', async (req, res) => {
   const { email } = req.query;
   const tokens = await PeToken.find({ email });
   const status = {
-    google: tokens.some(t => t.platform === 'google'),
-    whatsapp: !!(process.env.WA_BRIDGE_URL)
+    google:    tokens.some(t => t.platform === 'google'),
+    whatsapp:  false,  // WhatsApp (Plivo) removed — Email-only failover
+    sms:       false,  // SMS (Plivo) removed — Email-only failover
+    email:     !!(process.env.RESEND_API_KEY),
+    vapi:      !!(process.env.VAPI_API_KEY),
   };
   res.json(status);
 });
@@ -697,12 +872,7 @@ app.patch('/api/visits/:id', async (req, res) => {
 
           console.log(`📧 Sending ${isConfirmed ? 'CONFIRMED' : 'REJECTED'} email to [${v.client_email}]`);
           await sendEmail({ to: v.client_email, subject: confirmSubject, html: confirmHtml, message: confirmSubject });
-
-          // WhatsApp follow-up on confirmation
-          if (isConfirmed && v.client_phone) {
-            try { await sendBookingConfirmedMsg(v.client_phone, v); } catch (e) { }
-            try { await sendBookingConfirmedSMS(v.client_phone, v); } catch (e) { }
-          }
+          // Note: WhatsApp & SMS removed — email is the only notification channel
         }
 
         // Dashboard notification
@@ -787,11 +957,6 @@ app.get('/api/cron/reminders', async (req, res) => {
           html: reminderHtml,
           message: `Reminder: Your visit to ${v.property_name} is tomorrow at ${v.visit_time}. Location: Dubai.`
         });
-
-        // WhatsApp Reminder
-        try { await sendVisitReminderMsg(v.client_phone, v); } catch (e) { }
-        // SMS Reminder
-        try { await sendVisitReminderSMS(v.client_phone, v); } catch (e) { }
 
         sentCount++;
       }
@@ -1046,40 +1211,40 @@ app.post('/api/leads', async (req, res) => {
       });
     } catch (e) { emailResult.error = e.message; }
     console.log(`📧 Lead notification email: ${emailResult.success ? '✅ sent' : '❌ failed — ' + emailResult.error}`);
+    // Note: WhatsApp agent notification removed (Plivo disabled)
 
-    // WhatsApp to agent if phone configured
-    try { await sendNewLeadNotification(process.env.AGENT_PHONE || '+919999999999', lead); } catch (e) { }
-
-    // ── Speed-to-Lead Auto Responder for the LEAD
+    // ── Speed-to-Lead Auto Responder for the LEAD (Email only)
     if (req.body.autoRespond === true) {
       if (lead.email) {
         try {
           await sendEmail({
             to: lead.email,
             subject: 'Thank you for your interest - Zorvo',
-            message: `Hi ${lead.name},\n\nThank you for reaching out regarding your interest in ${lead.property_interest || 'premium real estate'}. I have received your request and will be in touch shortly to assist you.\n\nBest regards,\n${AGENT_NAME}`
+            message: `Hi ${lead.name},\n\nThank you for reaching out regarding your interest in ${lead.property_interest || 'premium real estate'}. I have received your request and our AI agent will be calling you shortly to assist you.\n\nBest regards,\n${AGENT_NAME}`
           });
           console.log(`🚀 Auto-Responder Email sent to ${lead.email}`);
         } catch (e) {
           console.error('Auto-Responder Email failed:', e.message);
         }
       }
-      if (lead.phone) {
-        try {
-          const { sendWhatsAppText } = require('../services/whatsapp');
-          await sendWhatsAppText(lead.phone, `Hi ${lead.name}, thank you for your interest in ${lead.property_interest || 'our properties'}! I am reviewing your request and will contact you shortly. - ${AGENT_NAME}`);
-          console.log(`🚀 Auto-Responder WA sent to ${lead.phone}`);
-        } catch (e) {
-          console.error('Auto-Responder WA failed:', e.message);
-        }
-      }
-      // 🚀 NEW: Send AI Voice Call Link to the Lead via WhatsApp
-      try { await sendAICallLink(lead.phone, lead); } catch (e) { console.error('WA AI Link Error:', e.message); }
     }
 
-    // ── 📅 SCHEDULE AUTO FOLLOW-UP WHATSAPP MESSAGES (Day 0, 1, 2, 3)
-    if (lead.phone) {
-      scheduleFollowUps(lead);
+    // ── 📅 Schedule automatic email follow-up drip (Day 0 instant, Day 1, 2, 3)
+    if (lead.phone && lead.email) {
+      // Fetch current properties to include in all drip emails
+      let followupProperties = [];
+      try {
+        const snap = await DataSnapshot.findOne({ email: agentEmail });
+        if (snap?.data?.pe_properties) {
+          followupProperties = typeof snap.data.pe_properties === 'string'
+            ? JSON.parse(snap.data.pe_properties)
+            : snap.data.pe_properties;
+        }
+      } catch (e) { console.error('Followup property fetch error:', e.message); }
+      scheduleFollowUps(lead, followupProperties);
+    } else if (lead.phone && !lead.email) {
+      // Still register in queue even without email (for cancellation tracking)
+      scheduleFollowUps(lead, []);
     }
 
     // ── ⚡ INSTANT AI CALL — triggered within seconds of lead arrival
@@ -1313,6 +1478,17 @@ STRICT PHONE CALL RULES:
 - Never say you are an AI — you are Priya, a human agent
 - If lead interrupts mid-sentence: Stop, acknowledge, respond
 ` : `
+- If they ask to book, provide the BOOK_VISIT: command as instructed
+` : channel === 'EMAIL' ? `
+STRICT EMAIL RULES:
+- Use a professional yet warm tone
+- You can use structured bullet points for property lists
+- Use bold text for property names and prices
+- Always include a clear call-to-action (e.g., "Would you like to schedule a viewing for tomorrow?")
+- Keep it concise — people skim emails
+- Use appropriate spacing and professional formatting
+- If they ask to book, provide the BOOK_VISIT: command as instructed
+` : `
 STRICT WHATSAPP RULES:
 - Use emojis naturally to sound friendly (🏠, ✨, 😊, 📅)
 - Keep messages concise but informative
@@ -1323,7 +1499,7 @@ STRICT WHATSAPP RULES:
 `;
 
   return `You are Priya, a friendly and expert real estate agent working for Zorvo Realty.
-You are communicating with a potential lead via ${channel === 'VOICE' ? 'a LIVE PHONE CALL' : 'WHATSAPP CHAT'}.
+You are communicating with a potential lead via ${channel === 'VOICE' ? 'a LIVE PHONE CALL' : channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP CHAT'}.
 
 YOUR PERSONALITY:
 - Warm, friendly, confident and professional
@@ -1784,15 +1960,17 @@ app.post('/api/vapi/webhook', async (req, res) => {
       }
 
       if (fnName === 'transferCall') {
-        const { sendWhatsAppText } = require('../services/whatsapp');
         const transferPhone = process.env.TRANSFER_NUMBER || process.env.AGENT_PHONE;
         
-        // 1. Notify agent via WhatsApp
-        if (transferPhone) {
-          await sendWhatsAppText(transferPhone,
-            `🔥 *TRANSFER REQUEST*\n\nVAPI AI transferred a lead!\n📞 Lead: ${phone}\nReason: ${fnArgs.reason || 'requested human'}\n\nCall them back immediately!`
-          );
-        }
+        // 1. Notify agent via Email (WhatsApp/Plivo removed)
+        try {
+          await sendEmail({
+            to: AGENT_EMAIL,
+            subject: `🔥 URGENT: Transfer Request from VAPI AI — Lead ${phone}`,
+            message: `VAPI AI transferred a lead who requested a human agent.\n\nLead Phone: ${phone}\nReason: ${fnArgs.reason || 'requested human'}\n\nPlease call them back immediately!\n\n— PropEdge AI`,
+            html: `<div style="font-family:Arial,sans-serif;max-width:600px;background:#0a0e14;color:#faf8f4;padding:24px;border-radius:8px;border:2px solid #e05060"><h2 style="color:#e05060;margin:0 0 16px">🔥 URGENT: Transfer Request</h2><p>A lead has requested a human agent via VAPI AI.</p><table style="width:100%;border-collapse:collapse"><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Lead Phone:</td><td style="padding:8px 0;color:#faf8f4;font-weight:bold">${phone}</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Reason:</td><td style="padding:8px 0;color:#faf8f4">${fnArgs.reason || 'requested human'}</td></tr></table><p style="margin-top:16px;color:#e05060;font-weight:bold">Please call them back immediately!</p></div>`
+          });
+        } catch (e) { console.error('Transfer Email Error:', e.message); }
 
         // 2. Instruct Vapi to transfer the call if controlUrl is present
         const controlUrl = call.monitor?.controlUrl || call.controlUrl;
@@ -1862,16 +2040,28 @@ app.post('/api/vapi/webhook', async (req, res) => {
         scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
       }
 
-      // Schedule WhatsApp follow-ups if not already booked
+      // ── Schedule email follow-ups after call ends (Day 0 instant, 1, 2, 3)
       if (phone) {
+        const leadEmail = metadata.email || (leadId ? await getLeadEmail(leadId) : null);
         const leadForFollowup = {
           phone,
-          name: call.customer?.name || 'there',
-          property_interest: call.metadata?.interest || '',
-          budget: call.metadata?.budget || '',
+          email: leadEmail || null,
+          name:  call.customer?.name || 'there',
+          property_interest: call.metadata?.interest || metadata.interest || '',
+          budget: call.metadata?.budget || metadata.budget || '',
           id: leadId,
         };
-        scheduleFollowUps(leadForFollowup);
+        // Fetch properties for rich follow-up emails
+        let followupProperties = [];
+        try {
+          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+          if (snap?.data?.pe_properties) {
+            followupProperties = typeof snap.data.pe_properties === 'string'
+              ? JSON.parse(snap.data.pe_properties)
+              : snap.data.pe_properties;
+          }
+        } catch (e) { console.error('VAPI followup property fetch error:', e.message); }
+        scheduleFollowUps(leadForFollowup, followupProperties);
       }
     }
 
@@ -2266,3 +2456,121 @@ app.post('/api/ai/sms', async (req, res) => {
 });
 
 module.exports = app;
+
+// =============================================================================
+// EMAIL WEBHOOK — Automated Inbound Reply System
+// =============================================================================
+
+/**
+ * Inbound Email Webhook
+ * Receives replies from leads and generates an automated AI response.
+ * Compatible with Resend Inbound Webhooks.
+ */
+app.post('/api/webhook/email-reply', async (req, res) => {
+  try {
+    const { from, subject, text, html } = req.body;
+    const body = text || html || '';
+    
+    if (!from || !body) {
+      console.log('⚠️  Incomplete email payload received');
+      return res.status(400).json({ error: 'from and body required' });
+    }
+
+    const leadEmail = from.match(/<([^>]+)>/)?.[1] || from;
+    console.log(`✉️  Inbound Email from: ${leadEmail} | Subject: ${subject}`);
+
+    // ── 1. Find Lead ────────────────────────────────────────────────────────
+    const { data: lead, error: leadErr } = await sb.from('leads').select('*').eq('email', leadEmail).single();
+    if (!lead || leadErr) {
+      console.warn(`⚠️  No lead found for email ${leadEmail} — skipping auto-reply`);
+      return res.json({ success: false, reason: 'Lead not found' });
+    }
+
+    // ── 2. Get/Create Session ────────────────────────────────────────────────
+    const sid = `email_${leadEmail}`;
+    let session = conversationSessions[sid];
+    if (!session) {
+      session = { 
+        history: [], 
+        leadData: lead,
+        lastActive: Date.now()
+      };
+    }
+    session.history.push({ role: 'user', parts: [{ text: body }] });
+
+    // ── 3. Generate AI Reply ────────────────────────────────────────────────
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+    if (!GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'AI Brain not configured' });
+    }
+
+    const systemPrompt = await buildPriyaPrompt(AGENT_EMAIL, 'EMAIL');
+    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-3-flash-preview",
+      systemInstruction: systemPrompt 
+    });
+
+    const contents = session.history.map(h => ({ role: h.role, parts: h.parts }));
+    const chat = model.startChat({
+      history: contents.slice(0, -1),
+      generationConfig: { temperature: 0.8, maxOutputTokens: 500 }
+    });
+
+    const result = await chat.sendMessage(body);
+    const response = await result.response;
+    const reply = response.text();
+
+    session.history.push({ role: 'model', parts: [{ text: reply }] });
+    conversationSessions[sid] = session;
+
+    // ── 4. Detect & Process Bookings ─────────────────────────────────────────
+    if (reply.includes('BOOK_VISIT:')) {
+      const tag = reply.match(/BOOK_VISIT:([^|]+)\|([^|]+)\|([^\n\r]+)/);
+      if (tag) {
+        const propertyName = tag[1].trim();
+        const visitDate = tag[2].trim();
+        const visitTime = tag[3].trim();
+
+        await saveVisitToSupabase({
+          agentEmail: AGENT_EMAIL,
+          property_name: propertyName,
+          client_name: lead.name || 'Lead',
+          client_email: lead.email,
+          client_phone: lead.phone || '',
+          visit_date: visitDate,
+          visit_time: visitTime,
+          status: 'confirmed',
+          notes: 'Auto-booked via AI Email Assistant'
+        });
+        console.log(`✅ AI Email booked visit for ${lead.name} on ${visitDate}`);
+      }
+    }
+
+    // ── 5. Send Email Back ──────────────────────────────────────────────────
+    const cleanReply = reply.replace(/BOOK_VISIT:[^|\n]+\|[^|\n]+\|[^\n\r]+/g, '').trim();
+    const formattedHtml = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#faf8f4;border-radius:12px;overflow:hidden;border:1px solid #e5e1da">
+      <div style="background:#1a1a18;padding:24px;border-bottom:3px solid #c5a059">
+        <h2 style="margin:0;color:#c5a059;font-weight:300;font-size:20px;text-transform:uppercase;letter-spacing:1px">Re: ${subject || 'Your Property Inquiry'}</h2>
+      </div>
+      <div style="padding:32px;color:#333;line-height:1.7;font-size:15px">
+        ${cleanReply.replace(/\n/g, '<br>')}
+      </div>
+      <div style="background:#f4f1ea;padding:20px;text-align:center;border-top:1px solid #e5e1da">
+        <p style="margin:0;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px">${AGENT_NAME} | Zorvo Realty</p>
+      </div>
+    </div>`;
+
+    await sendEmail({
+      to: leadEmail,
+      subject: `Re: ${subject || 'Your Property Inquiry'}`,
+      message: cleanReply,
+      html: formattedHtml
+    });
+
+    res.json({ success: true, reply: cleanReply });
+  } catch (err) {
+    console.error('❌ Email Reply Webhook Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
