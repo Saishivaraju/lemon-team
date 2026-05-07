@@ -2124,4 +2124,28 @@ app.post('/api/leads/:id/takeover', protect, async (req, res) => {
 });
 
 
+// ── AI SMS TOOL — For Vapi Function Calls ──────────────────────────────────
+app.post('/api/ai/sms', async (req, res) => {
+  try {
+    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments 
+             || req.body.message?.functionCall?.parameters 
+             || req.body;
+
+    if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
+
+    console.log(`📠 AI SMS Request for ${phone}`);
+
+    const { sendSMSText } = require('../services/sms');
+    const result = await sendSMSText(phone, message);
+
+    if (result.success) {
+      res.json({ success: true, message: 'SMS Sent' });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = app;

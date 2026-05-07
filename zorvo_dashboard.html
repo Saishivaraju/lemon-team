@@ -5936,9 +5936,9 @@
           </button>
           <button class="btn btn-ghost"
             style="flex-direction:column; padding:12px; height:auto; gap:4px; border-color:var(--blue); color:var(--blue)"
-            onclick="ldCall()">
-            <i class="fas fa-phone" style="font-size:18px"></i>
-            <span style="font-size:10px; font-weight:800">Call Agent</span>
+            onclick="ldSMS()">
+            <i class="fas fa-sms" style="font-size:18px"></i>
+            <span style="font-size:10px; font-weight:800">SMS</span>
           </button>
           <button class="btn btn-ghost"
             style="flex-direction:column; padding:12px; height:auto; gap:4px; border-color:var(--accent); color:var(--accent)"
@@ -6102,10 +6102,13 @@
           <div class="mkt-channel-card active"><i class="fab fa-facebook" style="color:#1877F2"></i>
             <div>Facebook Ad</div>
           </div>
-          <div class="mkt-channel-card active"><i class="fab fa-whatsapp" style="color:#25D366"></i>
+          <div class="mkt-channel-card active" onclick="toggleMktChannel(this, 'whatsapp')"><i class="fab fa-whatsapp" style="color:#25D366"></i>
             <div>WhatsApp Blast</div>
           </div>
-          <div class="mkt-channel-card"><i class="fas fa-envelope" style="color:var(--accent)"></i>
+          <div class="mkt-channel-card active" onclick="toggleMktChannel(this, 'sms')"><i class="fas fa-mobile-alt" style="color:var(--blue)"></i>
+            <div>SMS Blast</div>
+          </div>
+          <div class="mkt-channel-card" onclick="toggleMktChannel(this, 'email')"><i class="fas fa-envelope" style="color:var(--accent)"></i>
             <div>Email Campaign</div>
           </div>
         </div>
@@ -7087,6 +7090,30 @@
       if (!l || !l.phone) { toast('No phone number.', true); return; }
       openWhatsApp(l.phone);
     }
+    async function ldSMS() {
+      const l = state.leads.find(x => x.id === currentLeadId);
+      if (!l || !l.phone) { toast('No phone number.', true); return; }
+      const msg = prompt('Enter SMS message:', `Hi ${l.name}, I have some property updates for you! — ${state.settings.name}`);
+      if (!msg) return;
+      
+      try {
+        const res = await fetch('/api/sms', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: l.phone, message: msg })
+        });
+        const data = await res.json();
+        if (data.success) toast('SMS Sent! 📠');
+        else toast('SMS failed: ' + data.error, true);
+      } catch (e) {
+        toast('SMS Error: ' + e.message, true);
+      }
+    }
+    function ldEmail() {
+      const l = state.leads.find(x => x.id === currentLeadId);
+      if (!l || !l.email) { toast('No email address.', true); return; }
+      window.open(`mailto:${l.email}?subject=Property Update from ${state.settings.name}`, '_self');
+    }
     function ldScheduleVisit() {
       const l = state.leads.find(x => x.id === currentLeadId);
       closeModal('leadDetail');
@@ -8036,19 +8063,47 @@
       document.getElementById('mkt-prev-img').src = p.images?.[0] || '';
     }
 
+    let mktSelectedChannels = ['instagram', 'facebook', 'whatsapp', 'sms'];
+
+    function toggleMktChannel(el, channel) {
+      el.classList.toggle('active');
+      if (mktSelectedChannels.includes(channel)) {
+        mktSelectedChannels = mktSelectedChannels.filter(c => c !== channel);
+      } else {
+        mktSelectedChannels.push(channel);
+      }
+    }
+
     function launchPersonalAgency() {
+      if (mktSelectedChannels.length === 0) {
+        toast('Please select at least one channel.', true);
+        return;
+      }
+      
       toast('🚀 Launching Omnichannel Campaign...');
-      setTimeout(() => {
+      const msg = document.getElementById('mkt-wiz-caption').value || 'New property available!';
+      
+      setTimeout(async () => {
         closeModal('agencyLaunch');
-        toast('Campaign LIVE on Instagram, Facebook, and WhatsApp! ✅');
+        toast(`Campaign LIVE on ${mktSelectedChannels.join(', ')}! ✅`);
+
+        // Trigger SMS Blast if selected
+        if (mktSelectedChannels.includes('sms')) {
+          const recipients = state.leads.map(l => l.phone).filter(p => !!p);
+          if (recipients.length > 0) {
+            fetch('/api/sms/blast', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
+              body: JSON.stringify({ recipients, message: msg })
+            }).catch(e => console.error('SMS Blast failed:', e));
+          }
+        }
 
         // Mock analytics update
-        document.getElementById('mkt-stat-reach').textContent = '4.5K';
-        document.getElementById('mkt-stat-leads').textContent = '12';
-        document.getElementById('mkt-stat-clicks').textContent = '3.8%';
-        document.getElementById('mkt-stat-roi').textContent = '14x';
+        document.getElementById('mkt-stat-reach').textContent = (mktSelectedChannels.length * 1.5) + 'K';
+        document.getElementById('mkt-stat-leads').textContent = Math.floor(mktSelectedChannels.length * 4.5);
 
-        confetti({ particleCount: 200, spread: 90, origin: { y: 0.7 }, colors: ['#f0c040', '#E1306C', '#1877F2'] });
+        confetti({ particleCount: 200, spread: 90, origin: { y: 0.7 }, colors: ['#f0c040', '#E1306C', '#1877F2', '#3b82f6'] });
       }, 2000);
     }
     function toggleAiAutonomy(active) {

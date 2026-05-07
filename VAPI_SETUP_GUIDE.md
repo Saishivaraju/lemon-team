@@ -63,14 +63,46 @@ Add these two tools to your assistant configuration.
 }
 ```
 
-## 3. Webhook URL
-Set your "Server URL" in the Vapi dashboard to:
-`https://your-domain.com/api/vapi/webhook`
-*(Replace with your actual Vercel/Production URL)*
+### tool: sendSMS
+This allows Sarah to send the lead property details via SMS *during* the call.
+*   **Type:** Function (Custom Tool)
+*   **Description:** Send a text message (SMS) to the lead with property details.
+*   **Server URL:** `https://anizorvo.vercel.app/api/ai/sms`
+*   **Parameters (JSON Schema):**
+```json
+{
+  "type": "object",
+  "properties": {
+    "phone": { "type": "string", "description": "The lead's phone number" },
+    "message": { "type": "string", "description": "The SMS content to send" }
+  },
+  "required": ["phone", "message"]
+}
+```
 
-## 4. Inbound Calls
+## 3. Webhook URL (Critical for Retries)
+The webhook is how Vapi tells our system if a call was answered, missed, or if a visit was booked.
+
+1.  Set your **Server URL** in the Assistant's "Advanced" section to:
+    `https://anizorvo.vercel.app/api/vapi/webhook`
+2.  Ensure **all event messages** are enabled (specifically `call.status-update` and `end-of-call-report`).
+
+## 4. Smart Retry & Failover Logic
+Our system is configured to handle missed calls automatically with a three-stage escalation:
+
+1.  **Stage 1 (Retry 1)**: If the first call is missed, the system waits **5 minutes** and retries.
+2.  **Stage 2 (Retry 2)**: If still no answer, it waits **30 minutes** and retries a final time.
+3.  **Stage 3 (Omnichannel Failover)**: If all 3 attempts fail, the system automatically sends:
+    *   **WhatsApp Message** (Reviewing property listings).
+    *   **SMS** (Missed call notification).
+    *   **Email** (Professional follow-up).
+
+> [!NOTE]
+> This logic is managed entirely by the backend `services/retry.js` and does not require additional configuration in Vapi other than ensuring the Webhook URL is correct.
+
+## 5. Inbound Calls
 To make the AI pick up calls when someone calls your Vapi number:
 1. Go to **Phone Numbers** in the Vapi Dashboard.
 2. Select your phone number.
-3. In the **Server URL** field for the phone number, enter the same webhook URL as above: `https://your-domain.com/api/vapi/webhook`.
-4. Now, when a call comes in, Vapi will ask your server for the assistant configuration, and the AI will answer automatically.
+3. Set the **Server URL** for the phone number to the same webhook: `https://anizorvo.vercel.app/api/vapi/webhook`.
+4. Now, when a call comes in, the system will provide the assistant config dynamically, and Sarah will answer automatically.

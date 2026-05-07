@@ -62,6 +62,7 @@ async function makeOutboundCall(lead, properties = []) {
       agentId:  lead.agent_id || lead.agent_email || null,
       teamId:   lead.team_id  || null,
       phone:    lead.phone,
+      email:    lead.email    || null,
     },
   };
 
