@@ -51,16 +51,16 @@ async function triggerAICall(lead) {
 
     const data = await makeOutboundCall({ ...lead, email: lead.email || null }, properties);
     console.log(`📞 VAPI call triggered → ID: ${data.callId || 'sim'} for ${lead.name}`);
-    if (!data.success) {
-      scheduleRetry(lead, triggerAICall, triggerFailoverMessages);
-    } else {
+    
+    // If successful, we clear any previous retries. 
+    // If it fails immediately (API error), we return the failure so the caller can schedule a retry.
+    if (data.success) {
       cancelRetry(lead.phone);
     }
     return data;
   } catch (err) {
-    console.error('❌ VAPI trigger failed — scheduling retry:', err.message);
-    scheduleRetry(lead, triggerAICall, triggerFailoverMessages);
-    return { success: false };
+    console.error('❌ VAPI trigger failed:', err.message);
+    return { success: false, error: err.message };
   }
 }
 
@@ -1848,13 +1848,17 @@ app.post('/api/vapi/webhook', async (req, res) => {
         status: duration > 10 ? 'answered' : 'no_answer',
       });
 
-      // If no answer OR call failed (carrier blocks) → trigger retries then failover
-      const endedReason = call.endedReason || '';
-      const isFailed = endedReason.includes('error') || endedReason.includes('failed') || (duration < 5 && endedReason !== 'customer-ended-call');
-
       if ((isFailed || duration < 10) && phone) {
-        console.log(`⚠️  Detected call failure/no-answer for ${phone} (Reason: ${endedReason}). Scheduling retries before failover.`);
-        const leadMeta = { phone, name: call.customer?.name, id: leadId, email: metadata.email };
+        console.log(`⚠️  Detected call failure/no-answer for ${phone} (Reason: ${endedReason}). Scheduling retries.`);
+        const leadMeta = { 
+          phone, 
+          name: call.customer?.name, 
+          id: leadId, 
+          email: metadata.email,
+          property_interest: metadata.interest || '',
+          budget: metadata.budget || ''
+        };
+        // Use a small delay before first retry if it was a start error
         scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
       }
 
