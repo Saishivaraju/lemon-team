@@ -5199,7 +5199,7 @@
       <!-- AI COMMAND SUITE -->
       <div class="panel" id="panel-ai">
         <div class="sec-head">
-          <div class="sec-title"><i class="fas fa-robot"></i> ZORVO AI Lab (Gemini Pro)</div>
+          <div class="sec-title"><i class="fas fa-robot"></i> ZORVO AI Lab (Gemini 3 Flash)</div>
           <div class="badge badge-accent">Pulse Active</div>
         </div>
 
@@ -10318,6 +10318,35 @@ ${date}`;
     // ================================================================
     // EMAIL NOTIFICATIONS (PROXY)
     // ================================================================
+    async function triggerAICall(leadId) {
+      const lead = state.leads.find(l => l.id === leadId);
+      if (!lead) return toast('Lead not found.', true);
+
+      toast(`🚀 Triggering AI call for ${lead.name}...`);
+      
+      try {
+        const secret = (DB.get('pe_access') || {}).password || 'test'; // Use stored secret or fallback
+        const res = await fetch(`/api/leads/${leadId}/trigger-call`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-api-secret': secret 
+          },
+          body: JSON.stringify({ lead })
+        });
+        
+        const data = await res.json();
+        if (data.success) {
+          toast(`📞 Call initiated! ID: ${data.data?.callId || 'Simulated'}`);
+        } else {
+          toast(`❌ Call failed: ${data.error || 'Unknown error'}`, true);
+        }
+      } catch (err) {
+        console.error('Manual trigger error:', err);
+        toast('Failed to trigger call. Server offline?', true);
+      }
+    }
+
     async function sendAgentAlert(title, msg) {
       console.log('📧 Triggering Agent Alert:', title);
       try {

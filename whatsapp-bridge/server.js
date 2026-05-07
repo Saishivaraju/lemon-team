@@ -126,6 +126,57 @@ app.get('/qr', (req, res) => {
   `);
 });
 
+// ── AI CHAT ENGINE — Handle incoming messages ────────────────────────────────
+client.on('message', async (msg) => {
+  // Ignore messages from groups or status
+  if (msg.from.includes('@g.us') || msg.from === 'status@broadcast') return;
+  
+  // Ignore if it's not a text message
+  if (msg.type !== 'chat') return;
+
+  console.log(`📩 Received message from ${msg.from}: ${msg.body}`);
+
+  try {
+    // 1. Forward to your Vercel backend AI
+    const BACKEND = process.env.BACKEND_URL || 'https://real-estate-web-liard-rho.vercel.app';
+    const SECRET  = process.env.API_SECRET  || 'test';
+    
+    // Extract phone number from WhatsApp ID (e.g., "919999900000@c.us" -> "919999900000")
+    const phone = msg.from.split('@')[0];
+
+    const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+    const res = await fetch(`${BACKEND}/api/ai/chat`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-api-secret': SECRET 
+      },
+      body: JSON.stringify({
+        input: msg.body,
+        sessionId: 'wa_' + phone,
+        lead: { phone: phone, source: 'whatsapp' }
+      })
+    });
+
+    if (!res.ok) throw new Error(`Backend error: ${res.status}`);
+    const data = await res.json();
+
+    if (data.reply) {
+      // 2. Send AI reply back to WhatsApp
+      await client.sendMessage(msg.from, data.reply);
+      console.log(`🤖 AI Reply sent to ${msg.from}`);
+    }
+
+    // 3. If AI booked a visit, maybe send a special confirmation or log it
+    if (data.action === 'BOOKED') {
+      console.log(`📅 AI successfully booked a visit via WhatsApp for ${phone}`);
+    }
+
+  } catch (err) {
+    console.error('❌ AI Chat Bridge Error:', err.message);
+  }
+});
+
 // ── ROUTE — POST /send — Send a WhatsApp message ─────────────────────────────
 app.post('/send', async (req, res) => {
   const { to, message } = req.body;

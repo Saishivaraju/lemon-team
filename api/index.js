@@ -918,8 +918,15 @@ app.get('/api/ai/properties', async (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────────
 app.post('/api/leads', async (req, res) => {
   try {
-    const { agentEmail, lead } = req.body;
-    if (!agentEmail || !lead) return res.status(400).json({ error: 'agentEmail and lead required' });
+    let { agentEmail, lead } = req.body;
+    
+    // If body is a flat lead object, try to extract agentEmail from env or default
+    if (!lead && (req.body.name || req.body.phone)) {
+      lead = { ...req.body };
+    }
+    if (!agentEmail) agentEmail = process.env.AGENT_EMAIL || 'agent@propedge.test';
+
+    if (!lead) return res.status(400).json({ error: 'lead data required' });
     console.log(`📩 Processing lead for ${agentEmail}: ${lead.name}`);
 
     let supabaseResult = { success: false, error: 'Not attempted' };
@@ -1116,6 +1123,22 @@ app.post('/api/notify-lead', async (req, res) => {
   }
 });
 
+// ── POST /api/leads/:id/trigger-call — Manually trigger AI call from dashboard
+app.post('/api/leads/:id/trigger-call', protect, async (req, res) => {
+  try {
+    const { lead } = req.body;
+    if (!lead) return res.status(400).json({ error: 'lead data required' });
+
+    console.log(`🚀 Manually triggering AI call for ${lead.name} (${lead.phone})`);
+    const data = await triggerAICall(lead);
+    
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('❌ Manual trigger failed:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ──────────────────────────────────────────────────────────────────────────────
 // CALLS — POST /api/calls
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1202,7 +1225,7 @@ app.get('/api/mobile/poll-leads', (req, res) => {
 const conversationSessions = {};
 
 // Build a dynamic system prompt that includes ALL current property listings
-async function buildPriyaPrompt(agentEmail) {
+async function buildPriyaPrompt(agentEmail, channel = 'VOICE') {
   let propertyList = 'No properties listed yet.';
   try {
     const snapshot = await DataSnapshot.findOne({ email: agentEmail });
@@ -1228,12 +1251,29 @@ async function buildPriyaPrompt(agentEmail) {
     console.error('Error loading properties for prompt:', e.message);
   }
 
+  const channelRules = channel === 'VOICE' ? `
+STRICT PHONE CALL RULES:
+- Keep EVERY reply under 2 to 3 short sentences MAX
+- This is a phone call — be conversational, not written
+- Never use bullet points, symbols, asterisks, or formatting
+- Never say you are an AI — you are Priya, a human agent
+- If lead interrupts mid-sentence: Stop, acknowledge, respond
+` : `
+STRICT WHATSAPP RULES:
+- Use emojis naturally to sound friendly (🏠, ✨, 😊, 📅)
+- Keep messages concise but informative
+- You can use bullet points for property features
+- Use bold text for property names and prices
+- Always end with a clear question to keep the chat going
+- If they ask to book, provide the BOOK_VISIT: command as instructed
+`;
+
   return `You are Priya, a friendly and expert real estate agent working for Zorvo Realty.
-You are on a LIVE PHONE CALL with a potential lead who filled a form on our website.
+You are communicating with a potential lead via ${channel === 'VOICE' ? 'a LIVE PHONE CALL' : 'WHATSAPP CHAT'}.
 
 YOUR PERSONALITY:
 - Warm, friendly, confident and professional
-- Talk exactly like a real human agent on a phone call
+- Talk exactly like a real human agent
 - Use natural phrases like "Absolutely!", "That is great!", "Oh wonderful!", "I totally understand", "Of course!"
 - Show genuine excitement about properties
 - Be empathetic, patient, never pushy
@@ -1242,44 +1282,19 @@ YOUR PERSONALITY:
 OUR CURRENT PROPERTY LISTINGS (you know ALL of these):
 ${propertyList}
 
-YOUR GOALS IN THIS CALL:
+YOUR GOALS:
 1. Greet them warmly and ask how they are
 2. Ask what kind of property they need (apartment, villa, plot, commercial)
 3. Ask their preferred location or area
 4. Ask their budget range gently and naturally
-5. Ask if it is for personal use or investment
-6. Match them to the best property from our list above
-7. Describe the matched property naturally and excitedly
-8. Offer to book a visit — ask preferred date and time
-9. When they confirm date and time, say: BOOK_VISIT:[property_name]|[date]|[time]
-   Example: BOOK_VISIT:Sunset Villa|2024-02-15|10:00 AM
-10. After booking say: I have booked your visit! You will receive a confirmation shortly.
+5. Match them to the best property from our list above
+6. Offer to book a visit — ask preferred date and time
+7. When they confirm date and time, say: BOOK_VISIT:[property_name]|[date]|[time]
+8. After booking say: I have booked your visit! You will receive a confirmation shortly.
 
-BOOKING RULES:
-- Only say BOOK_VISIT: when the lead clearly confirms a date and time
-- Ask "Would you like to visit this weekend, or do you have another date in mind?"
-- Confirm the date and time before booking: "So that is [date] at [time], shall I confirm that?"
-- After they say yes, say the BOOK_VISIT: command
+${channelRules}
 
-STRICT PHONE CALL RULES:
-- Keep EVERY reply under 2 to 3 short sentences MAX
-- This is a phone call — be conversational, not written
-- Never use bullet points, symbols, asterisks, or formatting
-- Never say you are an AI — you are Priya, a human agent
-- If asked if you are human: say "Yes, I am Priya
-
-EDGE CASES YOU MUST HANDLE:
-- Lead says "call me later" or "busy now": Reply "Of course! Is tomorrow morning or evening better for you?" Do NOT end conversation yet.
-- Lead says "not interested": Reply "Totally understand! Was it the price, location, or just not the right time? Just so I can help better." Accept gracefully then close.
-- Lead asks random off-topic question: Answer in one sentence then pivot "By the way, what area were you looking at?"
-- Lead asks for human agent: Reply "Absolutely, I am alerting our senior agent right now. They will call you back within minutes." Then close warmly.
-- Lead is silent twice: Reply "Sorry, I think there may be a connection issue. I will have our agent follow up with you shortly. Have a great day!"
-- Lead interrupts mid-sentence: Stop, acknowledge what they said, respond to it first, your personal property consultant!"
-- Always end your reply with a question to keep conversation going
-- Sound completely NATURAL — short words, everyday language
-- If lead says bye or not interested: thank them warmly and end gracefully
-
-REMEMBER: You know all our properties listed above. Recommend them naturally based on what the lead needs.`;
+REMEMBER: Sound completely NATURAL — short words, everyday language. Your goal is to be their personal property consultant!`;
 }
 
 app.post('/api/ai/chat', async (req, res) => {
@@ -1310,15 +1325,16 @@ app.post('/api/ai/chat', async (req, res) => {
       return;
     }
 
-    const systemPrompt = await buildPriyaPrompt(AGENT_EMAIL);
+    const channel = (sessionId && sessionId.startsWith('wa_')) ? 'WHATSAPP' : 'VOICE';
+    const systemPrompt = await buildPriyaPrompt(AGENT_EMAIL, channel);
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-3-flash-preview",
+      systemInstruction: systemPrompt 
+    });
 
-    // Prepend system prompt to the first user message for 1.0 compatibility
     const contents = session.history.map(h => ({ role: h.role, parts: h.parts }));
-    if (contents.length > 0 && contents[0].role === 'user') {
-      contents[0].parts[0].text = `SYSTEM: ${systemPrompt}\n\nUSER: ${contents[0].parts[0].text}`;
-    }
+    // No need to prepend SYSTEM: to contents[0] anymore
 
     const chat = model.startChat({
       history: contents.slice(0, -1),
@@ -1469,23 +1485,64 @@ app.post('/api/marketing/kit', async (req, res) => {
 
 
 
-// ──────────────────────────────────────────────────────────────────────────────
-// MARKETING - POST /api/marketing/whatsapp-blast  (REAL — Meta WhatsApp API)
-// ──────────────────────────────────────────────────────────────────────────────
-app.post('/api/marketing/whatsapp-blast', async (req, res) => {
+// ── OFFICIAL META WHATSAPP CLOUD API — For Vapi Tool Calls ───────────────────
+app.post('/api/ai/whatsapp', async (req, res) => {
   try {
-    const { phone, message } = req.body;
+    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments 
+             || req.body.message?.functionCall?.parameters 
+             || req.body;
+
     if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
 
-    const { sendWhatsAppText } = require('../services/whatsapp');
-    const result = await sendWhatsAppText(phone, message);
+    console.log(`☁️ Cloud WhatsApp Request for ${phone}`);
 
-    console.log(`📱 WhatsApp Blast to ${phone}: ${result.success ? 'SENT' : 'FAILED'}`);
-    res.json(result);
+    const TOKEN    = process.env.WHATSAPP_TOKEN;
+    const PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
+
+    if (!TOKEN || !PHONE_ID) {
+      console.warn('⚠️ Meta WhatsApp Env Vars missing. Simulating...');
+      return res.json({ success: true, simulated: true, message: 'Env vars missing' });
+    }
+
+    const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+    const response = await fetch(`https://graph.facebook.com/v20.0/${PHONE_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        to: phone.replace(/\+/g, ''), // Meta needs numbers without the +
+        type: "text",
+        text: { body: message }
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('❌ Meta WhatsApp Error:', data.error.message);
+      return res.status(500).json({ success: false, error: data.error.message });
+    }
+
+    console.log(`✅ Meta WhatsApp Sent to ${phone}`);
+    res.json({ 
+      results: [{
+        toolCallId: req.body.message?.toolCalls?.[0]?.id || '1',
+        result: "Message sent successfully via WhatsApp."
+      }]
+    });
+
   } catch (error) {
+    console.error('❌ Cloud WhatsApp Critical Error:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// MARKETING - POST /api/marketing/whatsapp-blast  (Legacy - uses phone bridge)
+// ──────────────────────────────────────────────────────────────────────────────
 
 // ──────────────────────────────────────────────────────────────────────────────
 // SOCIAL PUBLISH - POST /api/social/publish  (Meta Graph API)

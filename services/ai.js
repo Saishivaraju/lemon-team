@@ -14,9 +14,9 @@ const generateDescription = async (details) => {
     // Try flash first, fallback to pro
     let model;
     try {
-      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     } catch (e) {
-      model = genAI.getGenerativeModel({ model: "gemini-pro" });
+      model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     }
 
     const prompt = `You are an expert luxury real estate copywriter. 
@@ -46,7 +46,7 @@ const generatePitchScript = async (lead, properties) => {
   try {
     if (!apiKey) throw new Error("GEMINI_API_KEY is missing");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     const propDetails = properties.map(p => `${p.name} in ${p.address} ($${p.price})`).join(', ');
     
     const prompt = `You are Sarah Al-Rashid, a top real estate agent at PropEdge.
@@ -77,7 +77,7 @@ const generateEmail = async (scenario, leadName, propertyName) => {
   try {
     if (!apiKey) throw new Error("GEMINI_API_KEY is missing");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     const prompt = `Draft a professional real estate email for the following scenario: ${scenario}.
     Client Name: ${leadName}
     Property Reference: ${propertyName || 'the property we discussed'}
@@ -98,7 +98,7 @@ const generateEmail = async (scenario, leadName, propertyName) => {
 
 const generateSocialMarketingKit = async (p) => {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
     const prompt = `Generate a social media marketing kit for this property:
     Name: ${p.name}, Location: ${p.address}, Price: ${p.price}
     Provide Hook, IG Caption, FB Story, LI Post, WA Blast.`;

@@ -58,9 +58,10 @@ async function makeOutboundCall(lead, properties = []) {
       name:   lead.name || 'Lead',
     },
     metadata: {
-      leadId:   lead.id     || null,
-      agentId:  lead.agent_id || null,
+      leadId:   lead.id       || null,
+      agentId:  lead.agent_id || lead.agent_email || null,
       teamId:   lead.team_id  || null,
+      phone:    lead.phone,
     },
   };
 
@@ -77,8 +78,9 @@ async function makeOutboundCall(lead, properties = []) {
     const data = await res.json();
 
     if (!res.ok) {
-      console.error('❌ VAPI call error:', data);
-      return { success: false, error: data.message || 'VAPI error' };
+      console.error('❌ VAPI API Error:', data);
+      const errorMsg = data.message || (data.error && data.error.message) || 'VAPI authorization failed. Check your VAPI_API_KEY.';
+      return { success: false, error: errorMsg };
     }
 
     console.log(`📞 VAPI call started → ID: ${data.id} for ${lead.name} (${lead.phone})`);
