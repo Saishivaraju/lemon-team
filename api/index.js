@@ -1477,8 +1477,6 @@ STRICT PHONE CALL RULES:
 - Never use bullet points, symbols, asterisks, or formatting
 - Never say you are an AI — you are Priya, a human agent
 - If lead interrupts mid-sentence: Stop, acknowledge, respond
-` : `
-- If they ask to book, provide the BOOK_VISIT: command as instructed
 ` : channel === 'EMAIL' ? `
 STRICT EMAIL RULES:
 - Use a professional yet warm tone
@@ -2008,11 +2006,11 @@ app.post('/api/vapi/webhook', async (req, res) => {
       const report = event?.message || {};
       const transcript = report.transcript || '';
       const recording = report.recordingUrl || null;
-      const duration = report.durationSeconds || 0;
-      const summary = report.summary || '';
-      const callId = call.id || null;
+      const endedReason = report.endedReason || 'unknown';
+      const duration    = report.durationSeconds || 0;
+      const isFailed    = ['customer-busy', 'customer-did-not-answer', 'voicemail', 'customer-did-not-pick-up', 'phone-number-not-found', 'network-error'].includes(endedReason);
 
-      console.log(`📋 VAPI call ended. Duration: ${duration}s`);
+      console.log(`📋 VAPI call ended. Duration: ${duration}s | Reason: ${endedReason}`);
 
       // Save call log
       await saveCallLog({

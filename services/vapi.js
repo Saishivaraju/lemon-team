@@ -9,7 +9,7 @@
 const VAPI_API_KEY         = process.env.VAPI_API_KEY;
 const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID;
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID;
-const AGENT_NAME           = process.env.AGENT_NAME    || 'Priya';
+const AGENT_NAME           = process.env.AGENT_NAME    || 'Sarah Al-Rashid';
 const COMPANY_NAME         = process.env.COMPANY_NAME  || 'Zorvo Realty';
 const BASE_URL             = process.env.BASE_URL       || 'https://real-estate-web-liard-rho.vercel.app';
 
@@ -24,10 +24,15 @@ async function makeOutboundCall(lead, properties = []) {
 
   // Format property list for the AI
   const propertyList = properties.length > 0
-    ? properties.map((p, i) =>
-        `${i+1}. ${p.name || p.title} — ${p.property_type || 'Property'} — ${p.location || 'N/A'} — ${p.price_label || p.price || 'Contact agent'}`
-      ).join('\n')
-    : 'Properties will be loaded dynamically.';
+    ? properties.slice(0, 15).map((p, i) =>
+        `${i+1}. ${p.name || p.title}
+   - Type: ${p.property_type || p.emoji || 'Property'}
+   - Location: ${p.address || p.location || 'N/A'}
+   - Price: ${p.price_label || (p.price ? '$' + Number(p.price).toLocaleString() : 'Contact agent')}
+   - Features: ${p.bedrooms ? p.bedrooms + ' BR' : ''} ${p.bathrooms ? '· ' + p.bathrooms + ' BA' : ''}
+   - Description: ${p.description ? p.description.substring(0, 100) + '...' : 'Premium property.'}`
+      ).join('\n\n')
+    : 'Properties will be loaded dynamically from our latest inventory.';
 
   // Build dynamic assistant override with lead context and property knowledge
   const assistantOverrides = {
@@ -42,7 +47,23 @@ async function makeOutboundCall(lead, properties = []) {
       messages: [
         {
           role: 'system',
-          content: `You are ${AGENT_NAME} from ${COMPANY_NAME}. You are calling a lead who interested in ${lead.property_interest || 'real estate'}.\n\nOUR CURRENT LISTINGS:\n${propertyList}\n\nGOAL: Verify interest and book a visit.`
+          content: `You are ${lead.assigned_agent_name || AGENT_NAME} from ${COMPANY_NAME}.
+You are calling ${lead.name || 'a lead'} who recently showed interest in ${lead.property_interest || 'real estate'} on our website.
+
+LEAD DETAILS:
+- Name: ${lead.name || 'Valued Client'}
+- Interest: ${lead.property_interest || 'General Real Estate'}
+- Budget: ${lead.budget || 'Flexible'}
+
+OUR CURRENT LISTINGS:
+${propertyList}
+
+YOUR GOAL:
+1. Greet them by name and mention their interest in ${lead.property_interest || 'our properties'}.
+2. Verify if their budget of ${lead.budget || 'flexible'} is still accurate or if they've seen something else they like.
+3. Use the property list above to suggest 1-2 specific matches if they are unsure.
+4. Book a physical visit for them.
+5. If they are busy, keep it short and offer to follow up via email.`
         }
       ]
     },
@@ -63,6 +84,8 @@ async function makeOutboundCall(lead, properties = []) {
       teamId:   lead.team_id  || null,
       phone:    lead.phone,
       email:    lead.email    || null,
+      interest: lead.property_interest || null,
+      budget:   lead.budget   || null,
     },
   };
 
@@ -152,10 +175,15 @@ async function listCalls(limit = 20) {
 // ── Build assistant config (call once to create your assistant) ───────────────
 function buildAssistantConfig(properties = []) {
   const propertyList = properties.length > 0
-    ? properties.map((p, i) =>
-        `${i+1}. ${p.name || p.title} — ${p.property_type || 'Property'} — ${p.location || 'N/A'} — ${p.price_label || p.price || 'Contact agent'}`
-      ).join('\n')
-    : 'Properties will be loaded dynamically.';
+    ? properties.slice(0, 15).map((p, i) =>
+        `${i+1}. ${p.name || p.title}
+   - Type: ${p.property_type || p.emoji || 'Property'}
+   - Location: ${p.address || p.location || 'N/A'}
+   - Price: ${p.price_label || (p.price ? '$' + Number(p.price).toLocaleString() : 'Contact agent')}
+   - Features: ${p.bedrooms ? p.bedrooms + ' BR' : ''} ${p.bathrooms ? '· ' + p.bathrooms + ' BA' : ''}
+   - Description: ${p.description ? p.description.substring(0, 100) + '...' : 'Premium property.'}`
+      ).join('\n\n')
+    : 'Properties will be loaded dynamically from our latest inventory.';
 
   return {
     name: `${AGENT_NAME} — ${COMPANY_NAME}`,
@@ -167,8 +195,10 @@ function buildAssistantConfig(properties = []) {
         {
           role:    'system',
           content: `You are ${AGENT_NAME}, a friendly and expert real estate agent at ${COMPANY_NAME}.
+You are answering a call from a lead who might be interested in our properties.
 
-You are on a LIVE PHONE CALL with a potential property buyer.
+OUR CURRENT LISTINGS:
+${propertyList}
 
 YOUR PERSONALITY:
 - Warm, friendly, confident, professional
@@ -178,31 +208,20 @@ YOUR PERSONALITY:
 - Never rush the customer
 - Always end your turn with a question to keep conversation going
 
-OUR CURRENT PROPERTY LISTINGS:
-${propertyList}
+YOUR CALL GOALS:
+1. Greet warmly and ask how they are.
+2. Ask what property type they need.
+3. Ask preferred location and budget.
+4. Match them to the best property from our listings.
+5. Describe the matched property naturally and excitedly.
+6. Book a physical visit for them — ask for their preferred date and time.
 
-YOUR CALL GOALS (in order):
-1. Greet warmly and ask how they are
-2. Ask what property type they need
-3. Ask preferred location and budget
-4. Match them to best property from listings
-5. Describe matched property naturally and excitedly  
-6. Offer to book a visit — ask preferred date and time
-7. Confirm date + time then call bookVisit function
-8. After booking — congratulate them warmly
-
-EDGE CASES:
-- "call me later" or "busy" → Ask "Of course! Is tomorrow morning or evening better?" — do NOT end call
-- "not interested" → Ask "Totally understand! Was it the price or location?" then close warmly
-- "want human agent" → Say "Absolutely, I am alerting our agent right now!" then use transferCall
-- silence twice → Close warmly and say agent will follow up
-
-STRICT RULES:
-- Max 2-3 SHORT sentences per reply — this is a phone call
-- Never use bullet points or symbols in speech
-- Never say you are an AI
-- Sound 100% natural and human`,
-        },
+YOUR RULES:
+- Max 2-3 SHORT sentences per reply.
+- Never use bullet points or symbols in speech.
+- Never say you are an AI.
+- Sound 100% natural and human.`
+        }
       ],
       functions: [
         {
