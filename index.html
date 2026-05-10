@@ -11,7 +11,12 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/css/intlTelInput.css">
+  <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.4/build/js/intlTelInput.min.js"></script>
   <style>
+    .iti { width: 100%; margin-bottom: 12px; flex: 1; }
+    .iti__country-list { color: #000; }
+    .iti input { width: 100% !important; }
     :root {
       --cream: #F8FAFC;
       --dark: #0A1628;
@@ -3033,6 +3038,8 @@
         if (el) {
           window.itiInstances[id] = window.intlTelInput(el, {
             initialCountry: "auto",
+            separateDialCode: true,
+            preferredCountries: ["ae", "us", "in", "gb"],
             geoIpLookup: callback => {
               fetch("https://ipapi.co/json")
                 .then(res => res.json())
