@@ -42,6 +42,71 @@
       --expanded-sidebar-width: 260px;
     }
 
+    /* TOPBAR DESKTOP */
+    .topbar {
+      background: rgba(13, 18, 27, 0.4);
+      backdrop-filter: blur(15px);
+      -webkit-backdrop-filter: blur(15px);
+      border-bottom: 1px solid var(--border);
+      margin: 0 -30px 20px -20px;
+      padding: 0 30px;
+      height: 70px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.3s ease;
+    }
+
+    .topbar-header {
+      display: none; /* Only for mobile */
+    }
+
+    .topbar .hud-metrics {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      border-left: 1px solid var(--border);
+      padding-left: 24px;
+      margin-left: 24px;
+    }
+
+    .desktop-only-actions {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .hud-card {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .hud-label {
+      font-size: 10px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+
+    .hud-val {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+    }
+
+    @media (min-width: 901px) {
+      .topbar {
+        display: flex !important;
+      }
+      .topbar-header {
+        display: none !important;
+      }
+      .topbar-title-desktop {
+        display: block;
+      }
+    }
+
     /* ELITE MARKETING CSS */
     .f-chip {
       padding: 6px 14px;
@@ -3989,58 +4054,67 @@
         bottom: 0;
         left: 0;
         right: 0;
-        background: rgba(13, 18, 27, 0.95);
-        backdrop-filter: blur(20px);
+        background: rgba(13, 18, 27, 0.98);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
         border-top: 1px solid var(--border);
-        height: 66px;
+        height: 70px;
         z-index: 2000;
         justify-content: space-around;
         align-items: center;
         padding-bottom: env(safe-area-inset-bottom);
+        box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
       }
 
       .m-nav-item {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 3px;
+        gap: 4px;
         color: var(--muted);
         text-decoration: none;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        padding: 6px 4px;
+        padding: 8px 4px;
         flex: 1;
         cursor: pointer;
-        transition: color 0.2s;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       .m-nav-item.active {
         color: var(--accent);
+        transform: translateY(-2px);
       }
 
       .m-nav-item i {
-        font-size: 17px;
+        font-size: 19px;
+        margin-bottom: 2px;
       }
 
       .m-fab {
         display: flex;
         position: fixed;
-        bottom: 82px;
-        right: 16px;
-        width: 50px;
-        height: 50px;
-        background: var(--accent);
+        bottom: 86px;
+        right: 20px;
+        width: 56px;
+        height: 56px;
+        background: linear-gradient(135deg, var(--accent), var(--accent2));
         color: #000;
         border-radius: 50%;
         align-items: center;
         justify-content: center;
-        font-size: 20px;
-        box-shadow: 0 4px 20px rgba(240, 192, 64, 0.4);
+        font-size: 22px;
+        box-shadow: 0 8px 25px rgba(var(--accent-rgb), 0.4);
         z-index: 1500;
         border: none;
         cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .m-fab:active {
+        transform: scale(0.9);
       }
 
       .main {
@@ -4050,34 +4124,51 @@
         padding: 0 !important;
       }
 
-      /* TOPBAR: compact — title + notif icon only */
+      /* TOPBAR: Optimized for mobile */
       .topbar {
         display: flex !important;
-        flex-wrap: nowrap !important;
-        height: 56px !important;
-        padding: 0 14px !important;
-        gap: 8px;
-        margin: 0 0 14px 0 !important;
+        flex-direction: column !important;
+        height: auto !important;
+        padding: 12px 16px !important;
+        gap: 12px;
+        margin: 0 !important;
         position: sticky;
         top: 0;
-        z-index: 100;
+        z-index: 1500;
+        background: rgba(5, 7, 10, 0.9);
+        backdrop-filter: blur(15px);
+        border-bottom: 1px solid var(--border);
       }
 
-      .topbar>div:first-child {
-        flex: 1;
-        min-width: 0;
+      .topbar-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
       }
 
       .topbar .hud-metrics {
-        display: none !important;
+        display: flex !important;
+        overflow-x: auto;
+        width: 100%;
+        gap: 12px;
+        padding-bottom: 8px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .topbar .hud-metrics::-webkit-scrollbar {
+        display: none;
+      }
+
+      .topbar .hud-card {
+        flex-shrink: 0;
+        min-width: 100px;
+        padding: 8px 12px !important;
       }
 
       .topbar .search-box {
-        display: none !important;
-      }
-
-      .topbar button[onclick*="index.html"] {
-        display: none !important;
+        display: none !important; /* Will use a toggleable search instead */
       }
 
       .topbar #main-cta {
@@ -4085,14 +4176,12 @@
       }
 
       .topbar-title {
-        font-size: 15px !important;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        font-size: 18px !important;
+        font-weight: 800 !important;
       }
 
       .content {
-        padding: 0 10px 90px 10px;
+        padding: 16px 16px 100px 16px;
         overflow: visible;
       }
 
@@ -4249,6 +4338,61 @@
         margin: 10px;
         width: calc(100% - 20px) !important;
         border-radius: 12px;
+      }
+
+      /* Mobile Menu Drawer */
+      .m-menu-drawer {
+        position: fixed;
+        bottom: -100%;
+        left: 0;
+        right: 0;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        border-radius: 24px 24px 0 0;
+        padding: 24px;
+        z-index: 2100;
+        transition: bottom 0.4s cubic-bezier(0.19, 1, 0.22, 1);
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      .m-menu-drawer.open {
+        bottom: 0;
+      }
+
+      .m-menu-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+
+      .m-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin-bottom: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        color: var(--text);
+        transition: all 0.2s;
+      }
+
+      .m-menu-item:active {
+        background: rgba(var(--accent-rgb), 0.1);
+        border-color: var(--accent);
+        transform: scale(0.98);
+      }
+
+      .m-menu-item i {
+        font-size: 18px;
+        color: var(--accent);
+        width: 24px;
+        text-align: center;
       }
     }
 
@@ -4600,46 +4744,76 @@
     <div class="m-nav-item" id="m-bookings" onclick="showPanel('bookings',this,true)"><i
         class="fas fa-calendar-check"></i><span>Visits</span></div>
     <div class="m-nav-item" id="m-marketing" onclick="showPanel('marketing',this,true)"><i
-        class="fas fa-bullseye"></i><span>Growth</span></div>
-    <div class="m-nav-item" id="m-settings" onclick="showPanel('settings',this,true)"><i
-        class="fas fa-sliders"></i><span>Config</span></div>
+        class="fas fa-bolt"></i><span>Tools</span></div>
+    <div class="m-nav-item" id="m-more" onclick="toggleMobileMenu()"><i
+        class="fas fa-bars"></i><span>More</span></div>
   </nav>
+
+  <!-- MOBILE MENU DRAWER -->
+  <div id="mobile-menu-overlay" class="sidesheet-overlay" onclick="toggleMobileMenu()">
+    <div id="mobile-menu" class="m-menu-drawer" onclick="event.stopPropagation()">
+      <div class="m-menu-header">
+        <div style="font-weight:800; font-size:18px">Agency Navigation</div>
+        <div class="ss-close" onclick="toggleMobileMenu()">✕</div>
+      </div>
+      <div class="m-menu-body">
+        <div class="m-menu-item" onclick="showPanel('properties',null,true); toggleMobileMenu()"><i class="fas fa-building"></i> <span>Property Listings</span></div>
+        <div class="m-menu-item" onclick="showPanel('map',null,true); toggleMobileMenu()"><i class="fas fa-map-location-dot"></i> <span>Map View</span></div>
+        <div class="m-menu-item" onclick="showPanel('analytics',null,true); toggleMobileMenu()"><i class="fas fa-chart-pie"></i> <span>Detailed Analytics</span></div>
+        <div class="m-menu-item" onclick="showPanel('team',null,true); toggleMobileMenu()"><i class="fas fa-users"></i> <span>Team Management</span></div>
+        <div class="m-menu-item" onclick="showPanel('notifications',null,true); toggleMobileMenu()"><i class="fas fa-bell"></i> <span>Alert Center</span></div>
+        <div class="m-menu-item" onclick="showPanel('settings',null,true); toggleMobileMenu()"><i class="fas fa-sliders"></i> <span>Agency Settings</span></div>
+        <div style="margin: 20px 0; height: 1px; background: var(--border)"></div>
+        <div class="m-menu-item" onclick="window.open('./index.html','_blank')" style="color: var(--accent)"><i class="fas fa-external-link-alt"></i> <span>View Live Website</span></div>
+      </div>
+    </div>
+  </div>
 
   <button class="m-fab" onclick="openModal('addLead')"><i class="fas fa-plus"></i></button>
 
   <div class="main">
-    <div class="topbar"
-      style="background: rgba(13, 18, 27, 0.4); backdrop-filter: blur(15px); border-bottom: 1px solid var(--border); margin: 0 -30px 20px -20px; padding: 0 30px; height: 70px; display: flex; align-items: center; justify-content: space-between">
-      <div style="display:flex; align-items:center; gap:24px">
-        <div class="topbar-title" id="panel-title" style="min-width: 120px; font-weight: 900; font-size: 20px">Overview
-        </div>
+    <div class="topbar">
+      <!-- Desktop Title -->
+      <div class="topbar-title desktop-only" id="panel-title-desktop" style="font-weight: 900; font-size: 20px; min-width: 120px">Overview</div>
 
-        <div class="hud-metrics" style="border-left: 1px solid var(--border); padding-left: 24px">
-          <div class="hud-item">
-            <div class="hud-label">Revenue</div>
-            <div class="hud-val" id="hud-rev">$0</div>
-          </div>
-          <div class="hud-item">
-            <div class="hud-label">Active</div>
-            <div class="hud-val" id="hud-hot">0</div>
-          </div>
-          <div class="hud-item">
-            <div class="hud-label">Tours</div>
-            <div class="hud-val" id="hud-visits">0</div>
+      <!-- Mobile Header -->
+      <div class="topbar-header">
+        <div class="topbar-title" id="panel-title-mobile">Overview</div>
+        <div style="display:flex; gap:12px; align-items:center">
+          <div class="notif-btn" onclick="showPanel('notifications',null)" style="position:relative; cursor:pointer">
+            <i class="fas fa-bell"></i>
+            <div class="notif-dot" id="notif-dot-mobile" style="display:none; position:absolute; top:-2px; right:-2px; width:8px; height:8px; background:var(--red); border-radius:50%; border:2px solid var(--bg)"></div>
           </div>
         </div>
       </div>
 
-      <div style="display:flex; gap:16px; align-items:center">
+      <div class="hud-metrics">
+        <div class="hud-item hud-card">
+          <div class="hud-label">Revenue</div>
+          <div class="hud-val" id="hud-rev">$0</div>
+        </div>
+        <div class="hud-item hud-card">
+          <div class="hud-label">Active</div>
+          <div class="hud-val" id="hud-hot">0</div>
+        </div>
+        <div class="hud-item hud-card">
+          <div class="hud-label">Tours</div>
+          <div class="hud-val" id="hud-visits">0</div>
+        </div>
+      </div>
+
+      <div class="desktop-only-actions">
         <button class="btn btn-ghost" onclick="window.open('./index.html','_blank')"
-          style="display:flex; align-items:center; gap:8px; border-color:var(--border); padding:0 20px; font-weight:700; height: 40px"><span><i
-              class="fas fa-globe"></i></span> View Public Site</button>
-        <div class="search-box"><span><i class="fas fa-search"></i></span><input type="text"
-            placeholder="Jump to lead or property..." oninput="globalSearch(this.value)"></div>
-        <div class="notif-btn" onclick="showPanel('notifications',null)"
-          style="width:40px; height:40px; display:flex; align-items:center; justify-content:center"><i
-            class="fas fa-bell"></i>
-          <div class="notif-dot" id="notif-dot" style="display:none"></div>
+          style="display:flex; align-items:center; gap:8px; border-color:var(--border); padding:0 20px; font-weight:700; height: 40px">
+          <span><i class="fas fa-globe"></i></span> View Public Site
+        </button>
+        <div class="search-box">
+          <span><i class="fas fa-search"></i></span>
+          <input type="text" placeholder="Jump to lead or property..." oninput="globalSearch(this.value)">
+        </div>
+        <div class="notif-btn" onclick="showPanel('notifications',null)" style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative">
+          <i class="fas fa-bell"></i>
+          <div class="notif-dot" id="notif-dot-desktop" style="display:none; position:absolute; top:8px; right:8px; width:8px; height:8px; background:var(--red); border-radius:50%; border:2px solid var(--surface)"></div>
         </div>
         <button class="btn btn-primary" onclick="openModal('addLead')" id="main-cta"
           style="padding:0 24px; height:40px; font-weight:900">+ Add Lead</button>
@@ -6749,8 +6923,12 @@
       setB('badge-bookings', confirmed);
       setB('badge-notifs', unread);
 
-      const notifDot = document.getElementById('notif-dot');
-      if (notifDot) notifDot.style.display = unread > 0 ? 'block' : 'none';
+      setB('badge-notifs', unread);
+
+      const dDot = document.getElementById('notif-dot-desktop');
+      const mDot = document.getElementById('notif-dot-mobile');
+      if (dDot) dDot.style.display = unread > 0 ? 'block' : 'none';
+      if (mDot) mDot.style.display = unread > 0 ? 'block' : 'none';
     }
 
 
@@ -10322,17 +10500,20 @@ ${date}`;
       document.getElementById('leads-tbody').innerHTML = filtered.map(l => `<tr><td style="font-weight:600">${l.name}</td><td style="color:var(--muted)">${l.phone || '—'}</td><td>${l.property_interest || '—'}</td><td><span class="badge ${bc[l.status] || ''}">${l.status}</span></td><td><span class="score ${sc(l.score)}">${l.score}</span></td><td>${l.source || '—'}</td><td>${l.notes || '—'}</td><td><button class="btn btn-ghost btn-sm" onclick="viewLead('${l.id}')"><i class="fas fa-eye"></i> View</button></td></tr>`).join('') || '<tr><td colspan="8" class="table-empty">No results</td></tr>';
     }
 
-    function showPanel(id, el, isMobile) {
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.getElementById('panel-' + id).classList.add('active');
-      document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-      document.querySelectorAll('.m-nav-item').forEach(i => i.classList.remove('active'));
-      if (el) el.classList.add('active');
-      document.getElementById('panel-title').textContent = id.charAt(0).toUpperCase() + id.slice(1);
-      if (isMobile) {
-        // Sync desktop nav if possible
-        const dtNav = [...document.querySelectorAll('.nav-item')].find(i => i.textContent.toLowerCase().includes(id));
-        if (dtNav) dtNav.classList.add('active');
+
+
+    function toggleMobileMenu() {
+      const overlay = document.getElementById('mobile-menu-overlay');
+      const drawer = document.getElementById('mobile-menu');
+      if (!overlay || !drawer) return;
+      
+      const isOpen = overlay.classList.contains('open');
+      if (isOpen) {
+        drawer.classList.remove('open');
+        setTimeout(() => overlay.classList.remove('open'), 300);
+      } else {
+        overlay.classList.add('open');
+        setTimeout(() => drawer.classList.add('open'), 10);
       }
     }
 
@@ -10341,25 +10522,68 @@ ${date}`;
     // ================================================================
     // UI HELPERS
     // ================================================================
-    function showPanel(name, el) {
+    function showPanel(name, el, isMobile = false) {
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
       document.getElementById('panel-' + name)?.classList.add('active');
+      
+      // Update Sidebar Nav
       document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      
+      // Update Mobile Nav
+      document.querySelectorAll('.m-nav-item').forEach(n => n.classList.remove('active'));
+      
       if (el) el.classList.add('active');
-      const titles = { dashboard: 'Dashboard', leads: 'Lead Management', pipeline: 'CRM Pipeline', properties: 'Property Listings', map: 'Map View', bookings: 'Confirmed Appointments', marketing: 'Marketing Tools', ai: 'AI Tools', analytics: 'Analytics', team: 'Team', notifications: 'Notifications', settings: 'Settings', documents: '🗂️ Documents Vault' };
-      document.getElementById('panel-title').textContent = titles[name] || name;
+      else if (isMobile) {
+        // Find matching mobile nav item if el is not provided
+        const mNavItem = document.getElementById('m-' + name);
+        if (mNavItem) mNavItem.classList.add('active');
+      }
+
+      const titles = { 
+        dashboard: 'Dashboard', leads: 'Lead Management', pipeline: 'CRM Pipeline', 
+        properties: 'Property Listings', map: 'Map View', bookings: 'Confirmed Appointments', 
+        marketing: 'Marketing Tools', ai: 'AI Tools', analytics: 'Analytics', 
+        team: 'Team', notifications: 'Notifications', settings: 'Settings', 
+        documents: '🗂️ Documents Vault' 
+      };
+      
+      const displayTitle = titles[name] || name.charAt(0).toUpperCase() + name.slice(1);
+      
+      const tDesk = document.getElementById('panel-title-desktop');
+      const tMob = document.getElementById('panel-title-mobile');
+      if (tDesk) tDesk.textContent = displayTitle;
+      if (tMob) tMob.textContent = displayTitle;
+
       const ctas = { leads: '+ Add Lead', properties: '+ Add Listing', bookings: '+ Schedule Tour', dashboard: '+ Add Lead' };
       const cta = document.getElementById('main-cta');
-      if (ctas[name]) { cta.style.display = 'flex'; cta.textContent = ctas[name]; cta.onclick = () => { if (name === 'leads' || name === 'dashboard') openModal('addLead'); else if (name === 'properties') openAddPropertyModal(); else if (name === 'bookings') openModal('addBooking'); }; }
-      else cta.style.display = 'none';
+      if (cta) {
+        if (ctas[name]) { 
+          cta.style.display = 'flex'; 
+          cta.textContent = ctas[name]; 
+          cta.onclick = () => { 
+            if (name === 'leads' || name === 'dashboard') openModal('addLead'); 
+            else if (name === 'properties') openAddPropertyModal(); 
+            else if (name === 'bookings') openModal('addBooking'); 
+          }; 
+        } else {
+          cta.style.display = 'none';
+        }
+      }
+
       if (name === 'map') initMap();
       if (name === 'bookings' || name === 'marketing') populateBookingProps();
       if (name === 'settings') { renderSettings(); renderIntegrations(); }
       if (name === 'documents') { loadDocuments(); loadAgreements(); }
 
-      const hud = document.querySelector('.hud-metrics');
-      if (hud) {
+      const huds = document.querySelectorAll('.hud-metrics');
+      huds.forEach(hud => {
         hud.style.display = (name === 'dashboard' || name === 'analytics') ? 'flex' : 'none';
+      });
+
+      if (isMobile) {
+        // Sync desktop nav if possible
+        const dtNav = [...document.querySelectorAll('.nav-item')].find(i => i.textContent.toLowerCase().includes(name));
+        if (dtNav) dtNav.classList.add('active');
       }
     }
 
