@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PropEdge AI System - Client Proposal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Montserrat:wght@700&display=swap');
+
+        :root {
+            --primary: #c5a059;
+            --primary-light: #d4b483;
+            --bg: #0a0e14;
+            --card-bg: #111520;
+            --text: #faf8f4;
+            --text-muted: rgba(250, 248, 244, 0.6);
+            --border: rgba(197, 160, 89, 0.2);
+            --shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .report-container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: white;
+            box-shadow: 0 0 40px rgba(0,0,0,0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* --- COVER PAGE --- */
+        .cover-page {
+            background: linear-gradient(135deg, #0a0e14 0%, #1a1a18 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: var(--text);
+            padding: 60px;
+            position: relative;
+        }
+
+        .cover-page::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at center, rgba(197, 160, 89, 0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .logo-box {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 48px;
+            font-weight: 700;
+            color: var(--primary);
+            letter-spacing: 4px;
+            margin-bottom: 20px;
+            border: 2px solid var(--primary);
+            padding: 10px 30px;
+            text-transform: uppercase;
+        }
+
+        .cover-title {
+            font-size: 36px;
+            font-weight: 300;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .cover-subtitle {
+            font-size: 18px;
+            color: var(--primary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            margin-bottom: 80px;
+        }
+
+        .cover-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border);
+            padding-top: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        /* --- CONTENT PAGES --- */
+        .page {
+            padding: 80px 60px;
+            background: white;
+            min-height: 100vh;
+            position: relative;
+            border-bottom: 1px solid #eee;
+        }
+
+        h2 {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 28px;
+            color: #0a0e14;
+            margin-bottom: 30px;
+            border-bottom: 3px solid var(--primary);
+            display: inline-block;
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            font-size: 20px;
+            color: #c5a059;
+            margin: 25px 0 15px 0;
+            font-weight: 700;
+        }
+
+        p {
+            margin-bottom: 20px;
+            font-size: 16px;
+            color: #444;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-top: 40px;
+        }
+
+        .feature-card {
+            background: #f8f9fa;
+            padding: 25px;
+            border-left: 4px solid var(--primary);
+            border-radius: 4px;
+        }
+
+        .feature-card h4 {
+            margin-bottom: 10px;
+            color: #0a0e14;
+            font-size: 18px;
+        }
+
+        .process-flow {
+            margin: 40px 0;
+            padding-left: 20px;
+            border-left: 2px dashed #ccc;
+        }
+
+        .process-step {
+            position: relative;
+            margin-bottom: 30px;
+            padding-left: 30px;
+        }
+
+        .process-step::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 5px;
+            width: 20px;
+            height: 20px;
+            background: var(--primary);
+            border-radius: 50%;
+            border: 4px solid white;
+        }
+
+        .stat-box {
+            background: #0a0e14 !important;
+            color: white !important;
+            padding: 40px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-around;
+            text-align: center;
+            margin: 40px 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .stat-item h5 {
+            font-size: 36px;
+            color: var(--primary) !important;
+            margin-bottom: 5px;
+        }
+
+        .stat-item p {
+            color: rgba(255,255,255,0.6) !important;
+            font-size: 14px;
+            margin: 0;
+        }
+
+        .highlight-box {
+            background: rgba(197, 160, 89, 0.1) !important;
+            border: 1px solid var(--primary);
+            padding: 30px;
+            border-radius: 8px;
+            margin: 30px 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        .footer-note {
+            font-size: 12px;
+            color: #999;
+            text-align: center;
+            margin-top: 60px;
+        }
+
+        /* --- PRINT STYLES --- */
+        @media print {
+            body { 
+                background: white; 
+                margin: 0; 
+                padding: 0; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact;
+            }
+            .report-container { 
+                margin: 0; 
+                box-shadow: none; 
+                max-width: 100%; 
+                width: 100%;
+                border-radius: 0; 
+                overflow: visible;
+            }
+            .cover-page, .page {
+                height: 296mm; 
+                min-height: 296mm;
+                max-height: 296mm;
+                page-break-after: always;
+                break-after: page;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                border: none;
+                margin: 0;
+            }
+            .page {
+                padding: 20mm 20mm;
+                background: white !important;
+            }
+            .cover-page {
+                background: linear-gradient(135deg, #0a0e14 0%, #1a1a18 100%) !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            .no-print { display: none; }
+            .feature-card, .stat-box, .highlight-box, .process-step {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+        }
+
+        .btn-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            gap: 10px;
+        }
+
+        .download-btn {
+            background: var(--primary);
+            color: #0a0e14;
+            padding: 12px 24px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 700;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            transition: transform 0.2s;
+        }
+
+        .download-btn:hover {
+            transform: scale(1.05);
+        }
+
+        .word-btn {
+            background: #2b579a;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="btn-container no-print">
+        <button class="download-btn word-btn" onclick="downloadWord();">📊 Download Word</button>
+        <button class="download-btn" onclick="window.print();">📄 Save as PDF</button>
+    </div>
+
+    <div id="report-content">
+        <div class="report-container">
+            <!-- PAGE 1: COVER -->
+            <div class="cover-page">
+                <div class="logo-box">PROPEDGE AI</div>
+                <h1 class="cover-title">The Future of Real Estate Lead Engagement</h1>
+                <p class="cover-subtitle">System Overview & Proposal</p>
+                
+                <div style="margin-top: 40px; font-weight: 300; letter-spacing: 1px;">
+                    PREPARED FOR: VALUED CLIENTS<br>
+                    PREPARED BY: ZORVO REALTY SOLUTIONS
+                </div>
+
+                <div class="cover-footer">
+                    <span>PropEdge Ecosystem v2.0</span>
+                    <span>Confidential Proposal 2026</span>
+                </div>
+            </div>
+
+            <!-- PAGE 2: EXECUTIVE SUMMARY -->
+            <div class="page">
+                <h2>Executive Summary</h2>
+                <p>In today's fast-paced real estate market, the difference between a closed deal and a lost lead is <strong>Speed to Contact</strong>. Statistics show that responding to a lead within 5 minutes increases the chance of conversion by 900%.</p>
+                
+                <p>The PropEdge AI System is designed to eliminate lead leakage. It provides a 24/7, human-like automated engagement layer that qualifies, suggests inventory, and books visits—all while your agents focus on closing deals.</p>
+
+                <div class="stat-box">
+                    <div class="stat-item">
+                        <h5>&lt; 10s</h5>
+                        <p>Response Time</p>
+                    </div>
+                    <div class="stat-item">
+                        <h5>24/7</h5>
+                        <p>Availability</p>
+                    </div>
+                    <div class="stat-item">
+                        <h5>100%</h5>
+                        <p>Lead Engagement</p>
+                    </div>
+                </div>
+
+                <h3>Why our system?</h3>
+                <p>Traditional real estate workflows rely on human agents manually calling back leads. This results in delays, missed calls, and inconsistent follow-ups. Our system automates the most critical first step, ensuring every prospect feels valued immediately.</p>
+                
+                <div class="highlight-box">
+                    <strong>The Best Feature:</strong> The "Zero-Leak" Funnel. If a lead doesn't answer the AI's call, the system automatically sends a personalized email with property matches based on their specific interest, ensuring no lead ever goes cold.
+                </div>
+            </div>
+
+            <!-- PAGE 3: THE VOICE AI -->
+            <div class="page">
+                <h2>How the AI Call Works</h2>
+                <p>Our voice agent, "Priya", is powered by the latest <strong>Advanced Cognitive Intelligence</strong>. She doesn't sound like a robot; she sounds like a professional real estate expert.</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>Human-Like Voice</h4>
+                        <p>Using <strong>high-fidelity speech synthesis</strong>, the AI speaks with natural tone, emotion, and professional etiquette.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Live Inventory Knowledge</h4>
+                        <p>The AI has real-time access to your property listings. It can suggest specific homes, mention prices, and describe features naturally.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Pre-Qualification</h4>
+                        <p>Instead of just booking everyone, the AI asks about budget and preferences, scoring leads for your team.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Direct Booking</h4>
+                        <p>If the lead is ready, the AI can check your availability and book a physical site visit directly into your calendar.</p>
+                    </div>
+                </div>
+
+                <h3>The Workflow</h3>
+                <div class="process-flow">
+                    <div class="process-step">
+                        <strong>Lead Submission</strong><br>
+                        A prospect fills a form on your website or social media.
+                    </div>
+                    <div class="process-step">
+                        <strong>Instant Call Trigger</strong><br>
+                        Within 5-10 seconds, the AI initiates an outbound call to the lead.
+                    </div>
+                    <div class="process-step">
+                        <strong>Conversational Qualification</strong><br>
+                        AI identifies their needs, budget, and location preference.
+                    </div>
+                    <div class="process-step">
+                        <strong>The Result</strong><br>
+                        Either a booked visit or a highly qualified lead data sent to your dashboard.
+                    </div>
+                </div>
+            </div>
+
+            <!-- PAGE 4: STRATEGIC ADVANTAGE -->
+            <div class="page">
+                <h2>The Strategic Advantage</h2>
+                <p>You may have seen "AI Bots" before, but PropEdge is fundamentally different. We don't just provide a voice; we provide a <strong>Real Estate Intelligence Layer</strong>.</p>
+
+                <h3>Why We Are Different</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>Deep Inventory Integration</h4>
+                        <p>Competitors offer generic bots that can't talk about specific properties. PropEdge is "Inventory-Aware"—it knows your listings, prices, and locations in real-time.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Ultra-Low Latency</h4>
+                        <p>Powered by <strong>Advanced Real-Time Processing</strong>, our AI has near-zero lag. The conversation flows naturally, unlike the awkward 3-second delays common in older systems.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Zero-Leak Failover</h4>
+                        <p>Most systems stop if the call fails. We automatically trigger a rich digital experience (Email/Maps) to ensure the lead stays engaged on multiple fronts.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Secure & Private</h4>
+                        <p>Your data is yours. We use private enterprise-grade connections to ensure your lead information and inventory stay within your control.</p>
+                    </div>
+                </div>
+
+                <div class="highlight-box" style="border-color: #3498db; background: rgba(52, 152, 219, 0.05);">
+                    <h3 style="color: #2980b9;">AI is a Superpower, Not a Replacement</h3>
+                    <p>One of the biggest misconceptions about AI is that it replaces employees. <strong>PropEdge is built to do the opposite.</strong></p>
+                    <p>Our system acts as a <strong>Digital Assistant</strong> for your agents. It handles the repetitive, exhausting, and often discouraging parts of the job:</p>
+                    <ul style="margin-left: 20px; color: #444; font-size: 15px;">
+                        <li>❌ No more manual cold-calling 200 dead leads.</li>
+                        <li>❌ No more chasing leads for basic info like budget or BHK.</li>
+                        <li>❌ No more missing leads that come in at 2:00 AM.</li>
+                    </ul>
+                    <p style="margin-top: 15px;"><strong>The Result:</strong> Your human agents are freed to focus on what they do best: <strong>Building relationships, negotiating terms, and closing high-value deals.</strong> We turn your team into "Closing Machines" by delivering them a calendar full of pre-qualified appointments.</p>
+                </div>
+            </div>
+
+            <!-- PAGE 5: FOLLOW-UP & OPTIMIZATION -->
+            <div class="page">
+                <h2>The Intelligent Follow-Up</h2>
+                <p>Most leads are lost because agents stop after one or two failed calls. Our system never stops until the lead is engaged.</p>
+
+                <h3>The Failover Mechanism</h3>
+                <p>If the lead doesn't answer the AI's call (busy, rejected, or no answer), the system immediately shifts to <strong>Digital Concierge Mode</strong>:</p>
+                
+                <div class="feature-card" style="background: #0a0e14 !important; color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+                    <h4 style="color: var(--primary) !important;">Rich Email Engagement</h4>
+                    <p style="color: rgba(255,255,255,0.7) !important;">The system generates a high-end HTML email featuring properties that match the lead's specific interest. It includes map links, property details, and a direct link to book a visit without needing to talk to anyone.</p>
+                </div>
+
+                <h3 style="margin-top: 40px;">How it Saves Time & Optimizes</h3>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4>80% Less Cold Calling</h4>
+                        <p>Your agents only talk to people who have already been qualified and have shown high intent.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4>Automated Scheduling</h4>
+                        <p>No more back-and-forth emails to find a time. The system handles the entire scheduling process.</p>
+                    </div>
+                </div>
+
+                <div class="highlight-box">
+                    <h3>System Setup & Operation</h3>
+                    <p>Once set up, the system runs autonomously. You receive notifications in your dashboard whenever a new "Qualified Lead" is found or a "Visit is Booked". You get the call transcript, the lead score, and all contact details instantly.</p>
+                </div>
+
+                <div class="footer-note">
+                    © 2026 Zorvo Real Estate Solutions. All Rights Reserved. Confidential & Proprietary.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function downloadWord() {
+            var wordContent = `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head><meta charset='utf-8'><title>PropEdge Proposal</title>
+            <!--[if gte mso 9]>
+            <xml>
+                <w:WordDocument>
+                    <w:View>Print</w:View>
+                    <w:Zoom>100</w:Zoom>
+                    <w:DoNotOptimizeForBrowser/>
+                </w:WordDocument>
+            </xml>
+            <![endif]-->
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; }
+                .page { page-break-after: always; padding: 20pt; width: 600pt; margin: auto; }
+                h1 { color: #faf8f4; font-size: 28pt; margin: 0; font-family: 'Segoe UI Light', sans-serif; }
+                h2 { color: #0a0e14; border-bottom: 2.25pt solid #c5a059; padding-bottom: 5pt; margin-top: 25pt; font-size: 20pt; }
+                h3 { color: #c5a059; margin-top: 15pt; font-size: 16pt; font-weight: bold; }
+                h4 { color: #0a0e14; font-size: 13pt; margin: 5pt 0; font-weight: bold; }
+                p { font-size: 11pt; line-height: 1.5; color: #333; margin-bottom: 8pt; }
+                ul { margin-top: 0; margin-bottom: 10pt; }
+                li { font-size: 10.5pt; color: #444; margin-bottom: 4pt; }
+            </style>
+            </head>
+            <body>
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; mso-table-lspace:0pt; mso-table-rspace:0pt;">
+                    <tr>
+                        <td align="center">
+                            <!-- PAGE 1 -->
+                            <table width="700" cellpadding="0" cellspacing="0" border="0" style="width:700pt; background-color:#0a0e14; mso-shading:windowtext; background: linear-gradient(135deg, #0a0e14, #1a1a18);">
+                                <tr>
+                                    <td align="center" style="padding: 100pt 40pt; height: 900pt;">
+                                        <div style="border: 2pt solid #c5a059; padding: 10pt 30pt; font-weight: bold; font-size: 36pt; color: #c5a059; text-transform: uppercase;">PROPEDGE AI</div>
+                                        <h1 style="color:#faf8f4; margin-top: 25pt;">The Future of Real Estate Lead Engagement</h1>
+                                        <p style="font-size: 16pt; color: #c5a059; letter-spacing: 5pt; text-transform: uppercase; margin-top: 10pt;">System Overview & Proposal</p>
+                                        <br><br><br><br>
+                                        <p style="color:#faf8f4; font-size: 12pt;">PREPARED FOR: VALUED CLIENTS<br>PREPARED BY: ZORVO REALTY SOLUTIONS</p>
+                                        <br><br>
+                                        <p style="color:rgba(255,255,255,0.4); font-size: 9pt;">Confidential Proposal 2026</p>
+                                    </td>
+                                </tr>
+                            </table>
+                            <br clear="all" style="page-break-before:always">
+
+                            <!-- PAGE 2 -->
+                            <table width="700" cellpadding="40" cellspacing="0" border="0" style="width:700pt; background-color:white;">
+                                <tr>
+                                    <td align="left">
+                                        <h2>Executive Summary</h2>
+                                        <p>In today's fast-paced real estate market, the difference between a closed deal and a lost lead is <b>Speed to Contact</b>. Statistics show that responding to a lead within 5 minutes increases the chance of conversion by 900%.</p>
+                                        <p>The PropEdge AI System is designed to eliminate lead leakage. It provides a 24/7, human-like automated engagement layer that qualifies, suggests inventory, and books visits—all while your agents focus on closing deals.</p>
+                                        
+                                        <table width="100%" cellpadding="20" cellspacing="0" style="background-color:#0a0e14; border-radius:10px; margin: 20pt 0;">
+                                            <tr>
+                                                <td align="center" style="color:white; width: 33%;">
+                                                    <b style="color:#c5a059; font-size:22pt;">&lt; 10s</b><br><span style="font-size:10pt;">Response Time</span>
+                                                </td>
+                                                <td align="center" style="color:white; width: 33%;">
+                                                    <b style="color:#c5a059; font-size:22pt;">24/7</b><br><span style="font-size:10pt;">Availability</span>
+                                                </td>
+                                                <td align="center" style="color:white; width: 33%;">
+                                                    <b style="color:#c5a059; font-size:22pt;">100%</b><br><span style="font-size:10pt;">Engagement</span>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <h3>Why our system?</h3>
+                                        <p>Traditional real estate workflows rely on human agents manually calling back leads. Our system automates the most critical first step, ensuring every prospect feels valued immediately.</p>
+                                        
+                                        <table width="100%" cellpadding="15" cellspacing="0" style="background-color:#fdfaf3; border: 1pt solid #c5a059; margin-top: 10pt;">
+                                            <tr>
+                                                <td><b style="color:#0a0e14;">The Best Feature:</b> The "Zero-Leak" Funnel. If a lead doesn't answer the AI's call, the system automatically sends a personalized email with property matches based on their specific interest.</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <br clear="all" style="page-break-before:always">
+
+                            <!-- PAGE 3 -->
+                            <table width="700" cellpadding="40" cellspacing="0" border="0" style="width:700pt; background-color:white;">
+                                <tr>
+                                    <td align="left">
+                                        <h2>How the AI Call Works</h2>
+                                        <p>Our voice agent, "Priya", is powered by the latest <b>Advanced Cognitive Intelligence</b>. She doesn't sound like a robot; she sounds like a professional real estate expert.</p>
+                                        
+                                        <table width="100%" cellpadding="10" border="0" style="margin-top: 15pt;">
+                                            <tr>
+                                                <td width="50%" style="background-color:#f8f9fa; border-left:4pt solid #c5a059; padding:15pt; vertical-align:top;">
+                                                    <h4>Human-Like Voice</h4>
+                                                    <p style="font-size:10pt; color:#444;">Using high-fidelity speech synthesis, the AI speaks with natural tone, emotion, and professional etiquette.</p>
+                                                </td>
+                                                <td width="10"></td>
+                                                <td width="50%" style="background-color:#f8f9fa; border-left:4pt solid #c5a059; padding:15pt; vertical-align:top;">
+                                                    <h4>Live Inventory Knowledge</h4>
+                                                    <p style="font-size:10pt; color:#444;">The AI has real-time access to your property listings. It can suggest specific homes, mention prices, and describe features naturally.</p>
+                                                </td>
+                                            </tr>
+                                            <tr><td height="15" colspan="3"></td></tr>
+                                            <tr>
+                                                <td width="50%" style="background-color:#f8f9fa; border-left:4pt solid #c5a059; padding:15pt; vertical-align:top;">
+                                                    <h4>Pre-Qualification</h4>
+                                                    <p style="font-size:10pt; color:#444;">Instead of just booking everyone, the AI asks about budget and preferences, scoring leads for your team.</p>
+                                                </td>
+                                                <td width="10"></td>
+                                                <td width="50%" style="background-color:#f8f9fa; border-left:4pt solid #c5a059; padding:15pt; vertical-align:top;">
+                                                    <h4>Direct Booking</h4>
+                                                    <p style="font-size:10pt; color:#444;">If the lead is ready, the AI can check your availability and book a physical site visit directly into your calendar.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <h3 style="margin-top: 30pt;">The Workflow</h3>
+                                        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-left: 2pt dashed #ccc; margin-left: 10pt; padding-left: 20pt;">
+                                            <tr><td style="padding-bottom: 20pt;"><b>1. Lead Submission</b><br><span style="font-size:10pt; color:#555;">A prospect fills a form on your website or social media.</span></td></tr>
+                                            <tr><td style="padding-bottom: 20pt;"><b>2. Instant Call Trigger</b><br><span style="font-size:10pt; color:#555;">Within 5-10 seconds, the AI initiates an outbound call to the lead.</span></td></tr>
+                                            <tr><td style="padding-bottom: 20pt;"><b>3. Conversational Qualification</b><br><span style="font-size:10pt; color:#555;">AI identifies their needs, budget, and location preference.</span></td></tr>
+                                            <tr><td><b>4. The Result</b><br><span style="font-size:10pt; color:#555;">Either a booked visit or a highly qualified lead data sent to your dashboard.</span></td></tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <br clear="all" style="page-break-before:always">
+
+                            <!-- PAGE 4 -->
+                            <table width="700" cellpadding="40" cellspacing="0" border="0" style="width:700pt; background-color:white;">
+                                <tr>
+                                    <td align="left">
+                                        <h2>The Strategic Advantage</h2>
+                                        <p>You may have seen "AI Bots" before, but PropEdge is fundamentally different. We don't just provide a voice; we provide a <b>Real Estate Intelligence Layer</b>.</p>
+
+                                        <h3>Why We Are Different</h3>
+                                        <p style="margin-bottom: 5pt;"><b>Deep Inventory Integration:</b> Competitors offer generic bots. PropEdge is "Inventory-Aware"—it knows your listings, prices, and locations in real-time.</p>
+                                        <p style="margin-bottom: 5pt;"><b>Ultra-Low Latency:</b> Powered by Advanced Processing, our AI has near-zero lag. The conversation flows naturally.</p>
+                                        <p style="margin-bottom: 5pt;"><b>Zero-Leak Failover:</b> Most systems stop if the call fails. We automatically trigger a rich digital experience to ensure engagement.</p>
+
+                                        <table width="100%" cellpadding="20" cellspacing="0" style="background-color:#eef7ff; border: 1.5pt solid #3498db; margin-top: 25pt;">
+                                            <tr>
+                                                <td>
+                                                    <h3 style="color:#2980b9; margin-top:0;">AI is a Superpower, Not a Replacement</h3>
+                                                    <p>One of the biggest misconceptions is that AI replaces employees. <b>PropEdge is built to do the opposite.</b></p>
+                                                    <p>Our system acts as a <b>Digital Assistant</b> for your agents. It handles the repetitive, exhausting parts of the job:</p>
+                                                    <ul style="color:#444;">
+                                                        <li>❌ No more manual cold-calling dead leads.</li>
+                                                        <li>❌ No more chasing leads for basic info like budget.</li>
+                                                        <li>❌ No more missing leads that come in at 2:00 AM.</li>
+                                                    </ul>
+                                                    <p><b>The Result:</b> Your human agents focus on <b>Building relationships and closing deals.</b></p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                            <br clear="all" style="page-break-before:always">
+
+                            <!-- PAGE 5 -->
+                            <table width="700" cellpadding="40" cellspacing="0" border="0" style="width:700pt; background-color:white;">
+                                <tr>
+                                    <td align="left">
+                                        <h2>The Intelligent Follow-Up</h2>
+                                        <p>Most leads are lost because agents stop after one or two failed calls. Our system never stops until the lead is engaged.</p>
+
+                                        <table width="100%" cellpadding="20" cellspacing="0" style="background-color:#0a0e14; color:white; border-radius: 8pt;">
+                                            <tr>
+                                                <td>
+                                                    <h4 style="color:#c5a059; margin-top:0; font-size: 16pt;">Rich Email Engagement</h4>
+                                                    <p style="color:#eee; font-size:10.5pt;">The system generates a high-end HTML email featuring properties that match the lead's specific interest. It includes map links, property details, and a direct link to book a visit without needing to talk to anyone.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+
+                                        <h3 style="margin-top:30pt;">How it Saves Time & Optimizes</h3>
+                                        <p><b>80% Less Cold Calling:</b> Your agents only talk to people who have already been qualified and have shown high intent.</p>
+                                        <p><b>Automated Scheduling:</b> No more back-and-forth emails to find a time. The system handles the entire scheduling process.</p>
+
+                                        <table width="100%" cellpadding="20" cellspacing="0" style="background-color:#fdfaf3; border: 1pt solid #c5a059; margin-top:30pt;">
+                                            <tr>
+                                                <td>
+                                                    <h3 style="margin-top:0;">System Setup & Operation</h3>
+                                                    <p>Once set up, the system runs autonomously. You receive notifications in your dashboard whenever a new "Qualified Lead" is found or a "Visit is Booked". You get the call transcript, the lead score, and all contact details instantly.</p>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                        <br><br>
+                                        <p align="center" style="color:#999; font-size: 9pt; margin-top: 40pt;">© 2026 Zorvo Real Estate Solutions. All Rights Reserved.</p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+            `;
+
+            var blob = new Blob(['\ufeff', wordContent], {
+                type: 'application/msword'
+            });
+            
+            var url = URL.createObjectURL(blob);
+            var filename = 'PropEdge_AI_Proposal.doc';
+            
+            var downloadLink = document.createElement("a");
+            document.body.appendChild(downloadLink);
+            downloadLink.href = url;
+            downloadLink.download = filename;
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        }
+    </script>
+</body>
+</html>
