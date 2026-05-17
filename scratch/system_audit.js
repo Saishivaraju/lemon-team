@@ -38,7 +38,7 @@ async function runAudit() {
   // 1. Check Properties (Health)
   console.log('\n--- 1. API Health (Properties) ---');
   try {
-    const props = await request('/api/properties', 'GET');
+    const props = await request('/api/ai/properties', 'GET');
     console.log('✅ API responds:', props.status === 200 ? 'OK' : 'FAIL (' + props.status + ')');
   } catch (e) { console.log('❌ API Check Failed:', e.message); }
 

@@ -406,6 +406,59 @@ async function syncLeadToSnapshot(agentEmail, leadId, updates) {
   }
 }
 
+async function robustUpdateLeadStage(leadId, stage) {
+  if (!leadId) return { success: false, error: 'No lead ID provided' };
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    
+    const isUUID = typeof leadId === 'string' && leadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/);
+    if (!isUUID) return { success: false, error: 'Invalid UUID format' };
+
+    const { data: teamLead } = await sb.from('team_leads').select('id').eq('id', leadId).limit(1);
+    if (teamLead && teamLead.length > 0) {
+      const { error } = await sb.from('team_leads').update({ stage: stage.toLowerCase(), updated_at: new Date().toISOString() }).eq('id', leadId);
+      return { success: !error, error };
+    }
+
+    const { data: lead } = await sb.from('leads').select('id').eq('id', leadId).limit(1);
+    if (lead && lead.length > 0) {
+      const titleStage = stage.charAt(0).toUpperCase() + stage.slice(1).toLowerCase();
+      const { error } = await sb.from('leads').update({ status: titleStage }).eq('id', leadId);
+      return { success: !error, error };
+    }
+    
+    return { success: false, error: 'Lead not found in database' };
+  } catch (err) {
+    console.error('❌ robustUpdateLeadStage Error:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+async function syncCallLogToSnapshot(agentEmail, callLogObj) {
+  try {
+    let snapshot = await DataSnapshot.findOne({ email: agentEmail });
+    if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: {} });
+    if (!snapshot.data) snapshot.data = {};
+
+    let calls = snapshot.data.pe_calls || [];
+    const wasString = typeof calls === 'string';
+    if (wasString) {
+      try { calls = JSON.parse(calls); } catch (e) { calls = []; }
+    }
+
+    calls.unshift(callLogObj);
+    if (calls.length > 100) calls = calls.slice(0, 100);
+
+    snapshot.data.pe_calls = wasString ? JSON.stringify(calls) : calls;
+    snapshot.markModified('data');
+    await snapshot.save();
+    console.log(`🔄 Call log successfully synced to MongoDB DataSnapshot for ${agentEmail}`);
+  } catch (err) {
+    console.error('❌ syncCallLogToSnapshot Error:', err.message);
+  }
+}
+
 async function notifyAgent(agentEmail, { title, description, type, icon, emailSubject }) {
   console.log(`🔔 Notifying Agent [${agentEmail}]: ${title}`);
 
@@ -881,10 +934,39 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
   })();
 
   // ── Update Lead Stage & Dashboard Sync
-  const leadId = visit.lead_id || visit.client_email;
-  if (leadId) {
-    await updateLeadStage(leadId, 'Negotiation');
-    await syncLeadToSnapshot(agentEmail, leadId, { pipeline_stage: 'Negotiation', status: 'Negotiation' });
+  let finalLeadId = visit.lead_id;
+  if (!finalLeadId || (typeof finalLeadId === 'string' && !finalLeadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/))) {
+    try {
+      const { createClient } = require('@supabase/supabase-js');
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+      
+      let leadData = null;
+      if (visit.client_phone) {
+        const { data } = await sb.from('team_leads').select('id').eq('phone', visit.client_phone).limit(1);
+        if (data && data.length > 0) leadData = data[0];
+      }
+      if (!leadData && visit.client_email) {
+        const { data } = await sb.from('team_leads').select('id').eq('email', visit.client_email).limit(1);
+        if (data && data.length > 0) leadData = data[0];
+      }
+      if (!leadData && visit.client_phone) {
+        const { data } = await sb.from('leads').select('id').eq('phone', visit.client_phone).limit(1);
+        if (data && data.length > 0) leadData = data[0];
+      }
+      if (!leadData && visit.client_email) {
+        const { data } = await sb.from('leads').select('id').eq('email', visit.client_email).limit(1);
+        if (data && data.length > 0) leadData = data[0];
+      }
+      
+      if (leadData) finalLeadId = leadData.id;
+    } catch (e) {
+      console.error('Error finding UUID for stage update:', e.message);
+    }
+  }
+
+  if (finalLeadId) {
+    await robustUpdateLeadStage(finalLeadId, 'Negotiation');
+    await syncLeadToSnapshot(agentEmail, finalLeadId, { pipeline_stage: 'Negotiation', status: 'Negotiation' });
   }
 
   return { success: true, id: realId };
@@ -1968,9 +2050,18 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
   console.log(`📡 VAPI webhook: ${type}`);
   
-  // We handle responses based on event type
+  // 1. FAST RESPONSE: Respond immediately for non-synchronous events to prevent Vapi timeouts
   if (type !== 'function-call' && type !== 'assistant-request') {
-    res.json({ received: true }); // Respond fast for non-tool/request events
+    res.json({ received: true });
+    
+    // We only process targetEvents asynchronously
+    const targetEvents = ['call-started', 'end-of-call-report', 'hang', 'status-update'];
+    if (!targetEvents.includes(type)) {
+      return;
+    }
+    if (type === 'status-update' && event?.message?.status !== 'in-progress') {
+      return;
+    }
   }
 
   try {
@@ -1980,11 +2071,30 @@ app.post('/api/vapi/webhook', async (req, res) => {
     const phone = call.customer?.number || null;
 
     // ── call-started ────────────────────────────────────────────────────────
-    if (type === 'call-started' || type === 'status-update' && event?.message?.status === 'in-progress') {
+    if (type === 'call-started' || (type === 'status-update' && event?.message?.status === 'in-progress')) {
       console.log(`📞 VAPI call started → ${phone}`);
-      if (leadId) {
-        await updateLeadStage(leadId, 'Contacted');
-        await syncLeadToSnapshot(AGENT_EMAIL, leadId, { pipeline_stage: 'Contacted', status: 'Contacted' });
+      
+      let finalLeadId = leadId;
+      if (!finalLeadId || (typeof finalLeadId === 'string' && !finalLeadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/))) {
+        try {
+          const { createClient } = require('@supabase/supabase-js');
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+          let leadData = null;
+          if (phone) {
+            const { data } = await sb.from('team_leads').select('id').eq('phone', phone).limit(1);
+            if (data && data.length > 0) leadData = data[0];
+          }
+          if (!leadData && phone) {
+            const { data } = await sb.from('leads').select('id').eq('phone', phone).limit(1);
+            if (data && data.length > 0) leadData = data[0];
+          }
+          if (leadData) finalLeadId = leadData.id;
+        } catch (e) {}
+      }
+
+      if (finalLeadId) {
+        await robustUpdateLeadStage(finalLeadId, 'Contacted');
+        await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, { pipeline_stage: 'Contacted', status: 'Contacted' });
       }
       if (phone) cancelRetry(phone);
     }
@@ -2022,13 +2132,32 @@ app.post('/api/vapi/webhook', async (req, res) => {
       if (fnName === 'bookVisit') {
         // Get lead details from DB
         let leadInfo = {};
-        if (leadId) {
-          try {
-            const { createClient } = require('@supabase/supabase-js');
-            const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+        try {
+          const { createClient } = require('@supabase/supabase-js');
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+          
+          // 1. Try team_leads by ID
+          if (leadId) {
+            const { data } = await sb.from('team_leads').select('*').eq('id', leadId).single();
+            if (data) leadInfo = data;
+          }
+          // 2. Try leads by ID
+          if (!leadInfo.name && leadId) {
             const { data } = await sb.from('leads').select('*').eq('id', leadId).single();
-            leadInfo = data || {};
-          } catch (e) { }
+            if (data) leadInfo = data;
+          }
+          // 3. Try team_leads by phone
+          if (!leadInfo.name && phone) {
+            const { data } = await sb.from('team_leads').select('*').eq('phone', phone).single();
+            if (data) leadInfo = data;
+          }
+          // 4. Try leads by phone
+          if (!leadInfo.name && phone) {
+            const { data } = await sb.from('leads').select('*').eq('phone', phone).single();
+            if (data) leadInfo = data;
+          }
+        } catch (e) {
+          console.error('Error fetching lead info in bookVisit webhook:', e.message);
         }
 
         // Save the booking
@@ -2037,10 +2166,10 @@ app.post('/api/vapi/webhook', async (req, res) => {
             agentEmail: AGENT_EMAIL,
             is_ai_booking: true,
             visit: {
-              lead_id: leadId,
+              lead_id: leadId || leadInfo.id || null,
               client_name: leadInfo.name || call.customer?.name || 'Lead',
-              client_phone: phone,
-              client_email: leadInfo.email || '',
+              client_phone: phone || leadInfo.phone || '',
+              client_email: leadInfo.email || call.customer?.email || '',
               property_name: fnArgs.property_interest || leadInfo.property_interest || 'Property Visit',
               visit_date: fnArgs.visit_date,
               visit_time: fnArgs.visit_time,
@@ -2075,7 +2204,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
       if (fnName === 'transferCall') {
         const transferPhone = process.env.TRANSFER_NUMBER || process.env.AGENT_PHONE;
         
-        // 1. Notify agent via Email (WhatsApp/Plivo removed)
+        // 1. Notify agent via Email
         try {
           await sendEmail({
             to: AGENT_EMAIL,
@@ -2124,7 +2253,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
             to: AGENT_EMAIL,
             subject: '⚠️ Unmatched Lead Alert: Request outside inventory',
             message: `A lead called but their request does not match our current inventory.
-
+ 
 Lead Phone: ${phone}
 Requested Budget: ${budget || 'N/A'}
 Requested Location: ${location || 'N/A'}
@@ -2133,7 +2262,7 @@ Property Type: ${property_type || 'N/A'}
 Please check the market and contact them within 5 hours.
 
 — PropEdge AI`,
-            html: '<div style="font-family:Arial,sans-serif;max-width:600px;background:#0a0e14;color:#faf8f4;padding:24px;border-radius:8px;border:2px solid #f0c040"><h2 style="color:#f0c040;margin:0 0 16px">⚠️ Unmatched Lead Request</h2><p>A lead called asking for something outside our current inventory. They have been informed you will reach out within 5 hours.</p><table style="width:100%;border-collapse:collapse"><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Lead Phone:</td><td style="padding:8px 0;color:#faf8f4;font-weight:bold">' + phone + '</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Requested Budget:</td><td style="padding:8px 0;color:#faf8f4">' + (budget || 'N/A') + '</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Requested Location:</td><td style="padding:8px 0;color:#faf8f4">' + (location || 'N/A') + '</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Property Type:</td><td style="padding:8px 0;color:#faf8f4">' + (property_type || 'N/A') + '</td></tr></table></div>'
+            html: `<div style="font-family:Arial,sans-serif;max-width:600px;background:#0a0e14;color:#faf8f4;padding:24px;border-radius:8px;border:2px solid #f0c040"><h2 style="color:#f0c040;margin:0 0 16px">⚠️ Unmatched Lead Request</h2><p>A lead called asking for something outside our current inventory. They have been informed you will reach out within 5 hours.</p><table style="width:100%;border-collapse:collapse"><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Lead Phone:</td><td style="padding:8px 0;color:#faf8f4;font-weight:bold">${phone}</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Requested Budget:</td><td style="padding:8px 0;color:#faf8f4">${budget || 'N/A'}</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Requested Location:</td><td style="padding:8px 0;color:#faf8f4">${location || 'N/A'}</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Property Type:</td><td style="padding:8px 0;color:#faf8f4">${property_type || 'N/A'}</td></tr></table></div>`
           });
         } catch (e) { console.error('Notify Email Error:', e.message); }
 
@@ -2157,7 +2286,7 @@ Please check the market and contact them within 5 hours.
 
       console.log(`📋 VAPI call ended. Duration: ${duration}s | Reason: ${endedReason}`);
 
-      // Save call log
+      // 1. Save call log to database
       await saveCallLog({
         leadId,
         agentId: metadata.agentId || null,
@@ -2167,6 +2296,216 @@ Please check the market and contact them within 5 hours.
         transcript,
         recordingUrl: recording,
         status: duration > 10 ? 'answered' : 'no_answer',
+      });
+
+      // 2. Extract structured qualification details from Vapi analysis report
+      const analysis = event?.message?.analysis || event?.analysis || event?.message?.call?.analysis || {};
+      const structuredData = analysis.structuredData || {};
+
+      const extractedLead = {
+        name: call.customer?.name || metadata.name || null,
+        phone: phone || call.customer?.number || metadata.phone || null,
+        email: metadata.email || call.customer?.email || structuredData.email || structuredData.client_email || null,
+        budget: structuredData.budget || metadata.budget || null,
+        bhk_preference: structuredData.bhk_preference || structuredData.bhkPreference || structuredData.bhk || null,
+        pre_approval_status: structuredData.pre_approval_status || structuredData.preApprovalStatus || structuredData.preApproval || null,
+        property_interest: structuredData.property_interest || structuredData.propertyInterest || metadata.interest || null,
+        notes: analysis.summary || transcript.substring(0, 500) || null,
+        status: 'Contacted',
+        qualification_score: parseInt(structuredData.qualification_score || structuredData.score || (structuredData.pre_approval_status === 'yes' ? 90 : 70)) || 70
+      };
+
+      // 3. Find and update the existing lead in database and dashboard snapshot
+      let finalLeadId = leadId;
+      const { createClient } = require('@supabase/supabase-js');
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+      let existingLead = null;
+      if (finalLeadId) {
+        let { data } = await sb.from('team_leads').select('*').eq('id', finalLeadId).single();
+        if (data) {
+          existingLead = { table: 'team_leads', data };
+        } else {
+          let { data: lData } = await sb.from('leads').select('*').eq('id', finalLeadId).single();
+          if (lData) existingLead = { table: 'leads', data: lData };
+        }
+      }
+      
+      if (!existingLead && phone) {
+        let { data } = await sb.from('team_leads').select('*').eq('phone', phone).single();
+        if (data) {
+          existingLead = { table: 'team_leads', data };
+          finalLeadId = data.id;
+        } else {
+          let { data: lData } = await sb.from('leads').select('*').eq('phone', phone).single();
+          if (lData) {
+            existingLead = { table: 'leads', data: lData };
+            finalLeadId = lData.id;
+          }
+        }
+      }
+
+      if (existingLead) {
+        console.log(`📝 Updating existing lead ${finalLeadId} in Supabase table "${existingLead.table}"`);
+        const updates = {};
+        if (extractedLead.budget) updates.budget = extractedLead.budget;
+        if (extractedLead.bhk_preference) updates.bhk_preference = extractedLead.bhk_preference;
+        if (extractedLead.pre_approval_status) updates.pre_approval_status = extractedLead.pre_approval_status;
+        if (extractedLead.property_interest) updates.property_interest = extractedLead.property_interest;
+        if (extractedLead.qualification_score) updates.qualification_score = extractedLead.qualification_score;
+        if (extractedLead.notes) updates.notes = (existingLead.data.notes ? existingLead.data.notes + '\n' : '') + `[AI Call Summary]: ${extractedLead.notes}`;
+        updates.stage = 'contacted';
+        updates.updated_at = new Date().toISOString();
+
+        if (existingLead.table === 'team_leads') {
+          await sb.from('team_leads').update(updates).eq('id', finalLeadId);
+        } else {
+          await sb.from('leads').update({
+            budget: updates.budget,
+            bhk_preference: updates.bhk_preference,
+            pre_approval_status: updates.pre_approval_status,
+            property_interest: updates.property_interest,
+            qualification_score: updates.qualification_score,
+            notes: updates.notes,
+            status: 'Contacted'
+          }).eq('id', finalLeadId);
+        }
+
+        // Sync to MongoDB DataSnapshot pe_leads
+        await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, {
+          ...updates,
+          pipeline_stage: 'Contacted',
+          status: 'Contacted'
+        });
+      } else if (phone) {
+        // Create new lead (inbound call)
+        console.log(`➕ Creating new lead in database for inbound phone: ${phone}`);
+        
+        const newLeadRecord = {
+          name: extractedLead.name || 'New Inbound Lead',
+          phone: phone,
+          email: extractedLead.email || '',
+          property_interest: extractedLead.property_interest || 'General Inquiry',
+          budget: extractedLead.budget || 'Flexible',
+          bhk_preference: extractedLead.bhk_preference || 'N/A',
+          pre_approval_status: extractedLead.pre_approval_status || 'N/A',
+          qualification_score: extractedLead.qualification_score || 50,
+          source: 'AI Inbound Call',
+          status: 'New',
+          notes: extractedLead.notes ? `[AI Inbound Call Summary]: ${extractedLead.notes}` : 'Created from AI Inbound Call'
+        };
+
+        let savedSbLead = null;
+        try {
+          const { data, error } = await sb.from('leads').insert([newLeadRecord]).select().single();
+          if (data) savedSbLead = data;
+        } catch (e) {}
+
+        let savedTeamLead = null;
+        try {
+          const newTeamLeadRecord = {
+            team_id: AGENT_EMAIL,
+            name: newLeadRecord.name,
+            phone: newLeadRecord.phone,
+            email: newLeadRecord.email,
+            property_interest: newLeadRecord.property_interest,
+            budget: newLeadRecord.budget,
+            source: newLeadRecord.source,
+            stage: 'contacted',
+            notes: newLeadRecord.notes
+          };
+          const { data, error } = await sb.from('team_leads').insert([newTeamLeadRecord]).select().single();
+          if (data) savedTeamLead = data;
+        } catch (e) {}
+
+        try {
+          let snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+          if (!snapshot) snapshot = new DataSnapshot({ email: AGENT_EMAIL, data: {} });
+          if (!snapshot.data) snapshot.data = {};
+          
+          let leads = snapshot.data.pe_leads || [];
+          if (typeof leads === 'string') {
+            try { leads = JSON.parse(leads); } catch (e) { leads = []; }
+          }
+
+          const mongoLead = {
+            id: savedTeamLead?.id || savedSbLead?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+            name: newLeadRecord.name,
+            phone: newLeadRecord.phone,
+            email: newLeadRecord.email,
+            property_interest: newLeadRecord.property_interest,
+            budget: newLeadRecord.budget,
+            bhk_preference: newLeadRecord.bhk_preference,
+            pre_approval_status: newLeadRecord.pre_approval_status,
+            qualification_score: newLeadRecord.qualification_score,
+            source: newLeadRecord.source,
+            status: 'Contacted',
+            pipeline_stage: 'Contacted',
+            notes: newLeadRecord.notes,
+            created_at: new Date().toISOString()
+          };
+
+          leads.unshift(mongoLead);
+          snapshot.data.pe_leads = leads;
+          snapshot.markModified('data');
+          await snapshot.save();
+          console.log(`✅ Saved new inbound lead ${mongoLead.id} to MongoDB snapshot`);
+        } catch (mErr) {
+          console.error('❌ Failed to save new inbound lead to MongoDB:', mErr.message);
+        }
+      }
+
+      // 4. Format and Sync Call Log and Transcript to MongoDB Snapshot pe_calls
+      const leadNameForCall = (existingLead?.data?.name) || extractedLead.name || 'New Inbound Lead';
+      
+      const minutes = Math.floor(duration / 60);
+      const seconds = Math.floor(duration % 60);
+      const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      
+      const messages = event?.message?.call?.messages || event?.message?.messages || [];
+      let formattedTranscript = [];
+      if (messages.length > 0) {
+        formattedTranscript = messages.map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.message || m.content || ''
+        }));
+      } else if (typeof transcript === 'string' && transcript.length > 0) {
+        formattedTranscript = transcript.split('\n').map(line => {
+          const parts = line.split(':');
+          if (parts.length >= 2) {
+            const role = parts[0].trim().toLowerCase().includes('assistant') ? 'assistant' : 'user';
+            const content = parts.slice(1).join(':').trim();
+            return { role, content };
+          }
+          return { role: 'user', content: line.trim() };
+        }).filter(t => t.content);
+      }
+
+      const urgencyScore = extractedLead.qualification_score ? Math.min(10, Math.max(1, Math.round(extractedLead.qualification_score / 10))) : 5;
+      
+      let callOutcome = 'Prospective';
+      if (duration < 10 || isFailed) {
+        callOutcome = 'No Answer';
+      } else if (transcript.toLowerCase().includes('bookvisit') || transcript.toLowerCase().includes('visit booked') || transcript.toLowerCase().includes('confirmed')) {
+        callOutcome = 'Confirmed';
+      }
+
+      await syncCallLogToSnapshot(AGENT_EMAIL, {
+        id: call.id || ('call_' + Date.now()),
+        lead_name: leadNameForCall,
+        urgency: urgencyScore,
+        outcome: callOutcome,
+        duration: durationStr,
+        transcript: formattedTranscript,
+        created_at: new Date().toISOString()
+      });
+
+      // 5. Send Bell Notification to Dashboard
+      await notifyAgent(AGENT_EMAIL, {
+        title: `📞 Call Ended: ${leadNameForCall}`,
+        description: `Duration: ${durationStr} · Status: ${callOutcome} · Score: ${urgencyScore}/10`,
+        type: 'info',
+        icon: 'fas fa-phone-alt'
       });
 
       if ((isFailed || duration < 10) && phone) {
@@ -2179,7 +2518,6 @@ Please check the market and contact them within 5 hours.
           property_interest: metadata.interest || '',
           budget: metadata.budget || ''
         };
-        // Use a small delay before first retry if it was a start error
         scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
       }
 
@@ -2194,7 +2532,6 @@ Please check the market and contact them within 5 hours.
           budget: call.metadata?.budget || metadata.budget || '',
           id: leadId,
         };
-        // Fetch properties for rich follow-up emails
         let followupProperties = [];
         try {
           const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
@@ -2207,7 +2544,6 @@ Please check the market and contact them within 5 hours.
         scheduleFollowUps(leadForFollowup, followupProperties);
       }
     }
-
 
     // ── hang — lead hung up ──────────────────────────────────────────────────
     else if (type === 'hang') {
