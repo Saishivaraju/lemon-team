@@ -916,11 +916,93 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
 
       // Client Confirmation Email
       if (visit.client_email) {
+        let propertyAddress = 'Confirmed Property Location';
+        try {
+          if (snapshot && snapshot.data && snapshot.data.pe_properties) {
+            const properties = typeof snapshot.data.pe_properties === 'string'
+              ? JSON.parse(snapshot.data.pe_properties)
+              : snapshot.data.pe_properties;
+            const found = properties.find(p =>
+              p.name === visit.property_name ||
+              p.id === visit.property_id ||
+              p.name?.toLowerCase() === visit.property_name?.toLowerCase()
+            );
+            if (found && found.address) {
+              propertyAddress = found.address;
+            }
+          }
+        } catch (e) { console.error('Lookup address error:', e.message); }
+
+        const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
+        const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
+        const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propertyAddress)}`;
+
         await sendEmail({
           to: visit.client_email,
-          subject: `🏡 CONFIRMED: Your visit to ${visit.property_name}`,
-          message: `Hi ${visit.client_name}, your visit is confirmed for ${visit.visit_date} at ${visit.visit_time}.`,
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;border-radius:8px;overflow:hidden"><div style="background:#1a1a18;padding:24px;text-align:center"><h2 style="color:#2ecc8a;margin:0">🏡 Visit Confirmed!</h2></div><div style="background:#fff;padding:24px"><p>Hi ${visit.client_name}, your viewing for <strong>${visit.property_name}</strong> is confirmed.</p></div></div>`
+          subject: `🏡 CONFIRMED: Your property viewing at ${visit.property_name}`,
+          message: `Hi ${visit.client_name},\n\nYour property viewing for ${visit.property_name} is confirmed!\n\nDate: ${visit.visit_date}\nTime: ${visit.visit_time}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nWe look forward to meeting you!`,
+          html: `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
+  <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
+    <h1 style="margin:0;color:#c5a059;font-size:24px;font-weight:300;letter-spacing:2px">🏡 VISIT CONFIRMED</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,0.6);font-size:14px">${agencyName} Premium Showings</p>
+  </div>
+  <div style="padding:32px;color:#faf8f4">
+    <p style="font-size:16px;line-height:1.6;color:rgba(255,255,255,0.85)">
+      Hi <strong>${visit.client_name}</strong>,
+    </p>
+    <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8)">
+      Your private viewing for the premium listing <strong>${visit.property_name}</strong> has been successfully booked and confirmed. Please find your showing itinerary details below:
+    </p>
+
+    <!-- Details Box -->
+    <div style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:24px;margin:24px 0">
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);width:120px;font-weight:600">🏠 Property</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visit.property_name}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">📅 Date</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visit.visit_date}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">⏰ Time</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visit.visit_time}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);vertical-align:top;font-weight:600">📍 Location</td>
+          <td style="padding:8px 0;color:#faf8f4;line-height:1.4">
+            ${propertyAddress}<br>
+            <a href="${mapUrl}" target="_blank" style="display:inline-block;margin-top:6px;color:#c5a059;text-decoration:none;font-weight:600;font-size:12px">🗺️ Open in Google Maps →</a>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Agent Card -->
+    <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+      <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">📋 ASSIGNED REAL ESTATE ADVISOR</h3>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div>
+          <div style="font-weight:bold;font-size:16px;color:#faf8f4">${agentName}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px">${agencyName} Elite Partner</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6">
+            📱 Phone: <strong>${agentPhone}</strong><br>
+            ✉️ Email: <strong>${AGENT_EMAIL}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3)">
+      Please notify us at least 24 hours in advance if you need to reschedule.<br>
+      © ${new Date().getFullYear()} ${agencyName}. All rights reserved.
+    </div>
+  </div>
+</div>`
         });
       }
 
@@ -1068,48 +1150,133 @@ app.patch('/api/visits/:id', async (req, res) => {
 // ──────────────────────────────────────────────────────────────────────────────
 app.get('/api/cron/reminders', async (req, res) => {
   try {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = tomorrow.toISOString().split('T')[0];
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-    console.log(`⏰ Running Reminders Cron for: ${dateStr}`);
+    console.log(`⏰ Running Reminders Cron for TODAY (${todayStr}) and TOMORROW (${tomorrowStr})...`);
 
-    const visits = await getVisitsByDate(dateStr);
-    if (!visits.success || !visits.data.length) {
-      return res.json({ success: true, message: 'No visits scheduled for tomorrow.' });
+    // 1. Fetch properties for address resolution
+    let properties = [];
+    try {
+      const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+      if (snapshot && snapshot.data && snapshot.data.pe_properties) {
+        properties = typeof snapshot.data.pe_properties === 'string'
+          ? JSON.parse(snapshot.data.pe_properties)
+          : snapshot.data.pe_properties;
+      }
+    } catch (e) { console.error('Error fetching properties for cron reminders:', e.message); }
+
+    // 2. Fetch bookings for both today and tomorrow in parallel
+    const [todayRes, tomorrowRes] = await Promise.all([
+      getVisitsByDate(todayStr),
+      getVisitsByDate(tomorrowStr)
+    ]);
+
+    let allVisits = [];
+    if (todayRes.success && todayRes.data) {
+      allVisits = allVisits.concat(todayRes.data.map(v => ({ ...v, relative: 'today' })));
+    }
+    if (tomorrowRes.success && tomorrowRes.data) {
+      allVisits = allVisits.concat(tomorrowRes.data.map(v => ({ ...v, relative: 'tomorrow' })));
+    }
+
+    if (allVisits.length === 0) {
+      return res.json({ success: true, message: 'No visits scheduled for today or tomorrow.' });
     }
 
     let sentCount = 0;
-    for (const v of visits.data) {
+    for (const v of allVisits) {
       if (v.status === 'confirmed' && v.client_email) {
+        let propertyAddress = 'Confirmed Property Location';
+        const found = properties.find(p =>
+          p.name === v.property_name ||
+          p.id === v.property_id ||
+          p.name?.toLowerCase() === v.property_name?.toLowerCase()
+        );
+        if (found && found.address) {
+          propertyAddress = found.address;
+        }
+
+        const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
+        const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
+        const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+        const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propertyAddress)}`;
+
+        const relativeText = v.relative === 'today' ? 'TODAY' : 'tomorrow';
+        const subjectText = v.relative === 'today'
+          ? `⏰ TODAY: Your property viewing at ${v.property_name}`
+          : `⏰ Reminder: Your viewing at ${v.property_name} is tomorrow`;
+
         const reminderHtml = `
-          <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f9f9f9;border-radius:8px;overflow:hidden">
-            <div style="background:#1a1a18;padding:24px;text-align:center"><h2 style="color:#d4b483;margin:0">⏰ Visit Reminder: Tomorrow</h2></div>
-            <div style="background:#fff;padding:24px">
-              <p style="color:#333;margin-top:0">Hi ${v.client_name},</p>
-              <p style="color:#555">This is a reminder for your property visit scheduled for <strong>tomorrow</strong>.</p>
-              <div style="background:#fffbf0;border:1px solid #d4b483;border-radius:6px;padding:16px;margin:16px 0">
-                <p style="margin:4px 0;color:#555"><strong>Property:</strong> ${v.property_name}</p>
-                <p style="margin:4px 0;color:#555"><strong>Date:</strong> ${v.visit_date}</p>
-                <p style="margin:4px 0;color:#555"><strong>Time:</strong> ${v.visit_time}</p>
-                <p style="margin:4px 0;color:#2ecc8a"><strong>Status:</strong> Confirmed</p>
-              </div>
-              <p style="color:#333;font-weight:bold">Contact Details:</p>
-              <p style="color:#555;margin:4px 0">👤 Agent: ${AGENT_NAME}</p>
-              <p style="color:#555;margin:4px 0">📞 ${process.env.AGENT_PHONE || '+971 50 123 4567'}</p>
-              <p style="color:#555;margin:4px 0">📧 ${AGENT_EMAIL}</p>
-              <div style="text-align:center;margin-top:20px">
-                <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.property_name + ' Dubai')}" style="background:#b8965a;color:#fff;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block">View Location on Maps →</a>
-              </div>
-            </div>
-            <div style="background:#1a1a18;padding:14px;text-align:center"><p style="color:#888;font-size:12px;margin:0">Zorvo Real Estate</p></div>
-          </div>`;
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
+  <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
+    <h1 style="margin:0;color:#c5a059;font-size:24px;font-weight:300;letter-spacing:2px">⏰ VIEWING REMINDER</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,0.6);font-size:14px">Your viewing is scheduled for ${relativeText}</p>
+  </div>
+  <div style="padding:32px;color:#faf8f4">
+    <p style="font-size:16px;line-height:1.6;color:rgba(255,255,255,0.85)">
+      Hi <strong>${v.client_name}</strong>,
+    </p>
+    <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8)">
+      This is a friendly reminder that your private property viewing for <strong>${v.property_name}</strong> is scheduled for <strong>${relativeText}</strong>. Please see showing details:
+    </p>
+
+    <!-- Details Box -->
+    <div style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:24px;margin:24px 0">
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);width:120px;font-weight:600">🏠 Property</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${v.property_name}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">📅 Date</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${v.visit_date}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">⏰ Time</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${v.visit_time}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);vertical-align:top;font-weight:600">📍 Location</td>
+          <td style="padding:8px 0;color:#faf8f4;line-height:1.4">
+            ${propertyAddress}<br>
+            <a href="${mapUrl}" target="_blank" style="display:inline-block;margin-top:6px;color:#c5a059;text-decoration:none;font-weight:600;font-size:12px">🗺️ Open in Google Maps →</a>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <!-- Agent Card -->
+    <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+      <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">📋 YOUR REAL ESTATE ADVISOR</h3>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div>
+          <div style="font-weight:bold;font-size:16px;color:#faf8f4">${agentName}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px">${agencyName} Elite Partner</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6">
+            📱 Phone: <strong>${agentPhone}</strong><br>
+            ✉️ Email: <strong>${AGENT_EMAIL}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:32px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3)">
+      Please notify us at least 24 hours in advance if you need to reschedule.<br>
+      © ${new Date().getFullYear()} ${agencyName}. All rights reserved.
+    </div>
+  </div>
+</div>`;
 
         await sendEmail({
           to: v.client_email,
-          subject: `⏰ Reminder: Your visit to ${v.property_name} is tomorrow`,
+          subject: subjectText,
           html: reminderHtml,
-          message: `Reminder: Your visit to ${v.property_name} is tomorrow at ${v.visit_time}. Location: Dubai.`
+          message: `Reminder: Your property viewing for ${v.property_name} is ${relativeText} at ${v.visit_time}. Address: ${propertyAddress}. Contact: ${agentName} (${agentPhone}).`
         });
 
         sentCount++;
