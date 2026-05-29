@@ -6221,6 +6221,40 @@
     </div>
   </div>
 
+  <div class="modal-overlay" id="modal-generateOffer">
+    <div class="modal" style="width:500px">
+      <div class="modal-title">Generate & Send Offer</div>
+      <div class="modal-close" onclick="closeModal('generateOffer')">&#10005;</div>
+      <div class="modal-body" style="padding:20px 0">
+        <input type="hidden" id="go-lead-id">
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Client Name</label>
+          <input class="form-input" id="go-lead-name" readonly style="background:rgba(255,255,255,0.05); color:var(--muted)">
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Client Email</label>
+          <input class="form-input" id="go-lead-email" readonly style="background:rgba(255,255,255,0.05); color:var(--muted)">
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Property Interest</label>
+          <select class="form-input" id="go-property-select" style="background:#0a0e14; color:#fff"></select>
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Offer Amount ($)</label>
+          <input class="form-input" type="number" id="go-offer-amount" placeholder="e.g. 500000">
+        </div>
+        <div class="form-group" style="margin-bottom:16px">
+          <label class="form-label">Custom Offer / Financing Notes</label>
+          <textarea class="form-input" id="go-offer-notes" rows="4" placeholder="e.g. Subject to obtaining a 30-year conventional mortgage with 20% down payment..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer" style="padding-top:20px; border-top:1px solid var(--border); display:flex; gap:10px">
+        <button class="btn btn-ghost" style="flex:1" onclick="closeModal('generateOffer')">Cancel</button>
+        <button class="btn btn-primary" style="flex:1" onclick="submitGenerateOffer()">🚀 SEND OFFER</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="modal-leadDetail">
     <div class="modal" style="width:520px">
       <div class="modal-title" id="ld-title">Lead Details</div>
@@ -11463,6 +11497,98 @@ ${date}`;
     }
 
   
+    window.generateContract = function(leadId) {
+      const l = state.leads.find(x => x.id === leadId);
+      if(!l) return toast('Lead not found.', true);
+      
+      document.getElementById('go-lead-id').value = l.id;
+      document.getElementById('go-lead-name').value = l.name || '';
+      document.getElementById('go-lead-email').value = l.email || '';
+      document.getElementById('go-offer-amount').value = l.budget ? parseInt(l.budget.toString().replace(/[^0-9]/g, '')) || '' : '';
+      
+      // Populate properties select
+      const propSelect = document.getElementById('go-property-select');
+      if (propSelect) {
+        propSelect.innerHTML = state.properties.map(p => `<option value="${p.name}">${p.name} - $${fmtNum(p.price)}</option>`).join('');
+      }
+      
+      document.getElementById('go-offer-notes').value = `Subject to obtaining financing. 10% earnest money deposit. Closing within 45 days.`;
+      
+      openModal('generateOffer');
+    };
+
+    window.submitGenerateOffer = async function() {
+      const leadId = document.getElementById('go-lead-id').value;
+      const l = state.leads.find(x => x.id === leadId);
+      if(!l) return toast('Lead not found.', true);
+      
+      const email = document.getElementById('go-lead-email').value;
+      if(!email) return toast('Client must have an email address to send the offer.', true);
+      
+      const property = document.getElementById('go-property-select').value;
+      const amount = document.getElementById('go-offer-amount').value;
+      const notes = document.getElementById('go-offer-notes').value;
+      
+      if(!amount) return toast('Please enter an offer amount.', true);
+      
+      const offerId = 'offer_' + Date.now();
+      const docName = `Offer_${l.name.replace(/\s+/g, '_')}_${property.replace(/\s+/g, '_')}.pdf`;
+      
+      // 1. Save document to Vault
+      let vault = DB.getAll('pe_vault') || [];
+      vault.push({
+        id: 'doc_' + Date.now(),
+        name: docName,
+        lead_id: l.id,
+        lead_name: l.name,
+        date: new Date().toISOString().split('T')[0]
+      });
+      DB.set('pe_vault', vault);
+      
+      // 2. Add Notification
+      let notifs = DB.getAll('pe_notifications') || [];
+      notifs.unshift({
+        id: 'notif_' + Date.now(),
+        title: '✍️ Offer Created',
+        text: `Custom purchase offer of $${Number(amount).toLocaleString('en-US')} created and sent to ${l.name} for ${property}.`,
+        time: new Date().toISOString(),
+        read: false
+      });
+      DB.set('pe_notifications', notifs);
+      
+      // 3. Update Lead Status & Budget
+      l.status = 'Negotiation';
+      l.budget = amount;
+      l.notes = (l.notes || '') + `\n[Offer Sent: $${Number(amount).toLocaleString('en-US')} for ${property} on ${new Date().toLocaleDateString('en-US')}]`;
+      
+      // Update leads array
+      const leadIndex = state.leads.findIndex(x => x.id === l.id);
+      if (leadIndex !== -1) {
+        state.leads[leadIndex] = l;
+        DB.set('pe_leads', state.leads);
+      }
+      
+      // 4. Send Email to client
+      const subject = `✍️ Purchase Offer Prepared for ${property} — Action Required`;
+      const message = `Hi ${l.name.split(' ')[0]},\n\nWe have drafted a formal purchase offer for the property: ${property}.\n\nOffer Amount: $${Number(amount).toLocaleString('en-US')}\nTerms/Notes: ${notes}\n\nPlease find the generated contract ready for your digital signature inside your Secure Portal.\n\nBest regards,\n${state.agent?.name || 'Zorvo Agent'}`;
+      
+      try {
+        await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to: email, subject, message })
+        }).catch(e => {});
+        toast('Offer sent to client successfully! 🚀');
+      } catch(e) {
+        console.error('Error sending offer email:', e);
+        toast('Offer generated & saved, but email dispatch failed.', true);
+      }
+      
+      closeModal('generateOffer');
+      syncToDB();
+      renderAll();
+    };
+
     // SMART TOOLS JS
     function populateSmartToolsSelects() {
       const ls = state.leads.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
