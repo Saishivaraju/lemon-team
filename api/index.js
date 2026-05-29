@@ -1,6 +1,7 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const express = require('express');
 const mongoose = require('mongoose');
+mongoose.set('bufferCommands', false);
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
@@ -873,46 +874,164 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
     }
   }
 
-  // ── Save to Supabase
-  const { success: supabaseSaved, data: savedVisit, error: supabaseError } = await saveVisitToSupabase({
-    ...visit,
-    agreement_id: visit.agreement_token || null,
-    qualification_id: visit.qualification_token || null,
-    status: 'confirmed',
-    created_at: new Date().toISOString()
-  });
+  // ── Lookup existing active visit for this lead/phone to enforce single-booking and support voice rescheduling
+  let existingActiveVisit = null;
+  let isReschedule = false;
+  let supabaseSaved = false;
+  let savedVisit = null;
 
-  if (!supabaseSaved) {
-    throw new Error('Database Save Failed: ' + supabaseError);
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    
+    if (visit.lead_id) {
+      const { data } = await sb.from('visits')
+        .select('*')
+        .eq('lead_id', visit.lead_id)
+        .neq('status', 'cancelled')
+        .neq('status', 'rejected')
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        existingActiveVisit = data[0];
+      }
+    }
+    if (!existingActiveVisit && visit.client_phone) {
+      const { data } = await sb.from('visits')
+        .select('*')
+        .eq('client_phone', visit.client_phone)
+        .neq('status', 'cancelled')
+        .neq('status', 'rejected')
+        .order('created_at', { ascending: false });
+      if (data && data.length > 0) {
+        existingActiveVisit = data[0];
+      }
+    }
+
+    if (existingActiveVisit) {
+      isReschedule = true;
+      console.log(`🔄 Enforcing single-visit rule (Supabase): Found active visit ${existingActiveVisit.id}. Rescheduling to ${visit.visit_date} at ${visit.visit_time}.`);
+      const { data, error } = await sb.from('visits')
+        .update({
+          visit_date: visit.visit_date,
+          visit_time: visit.visit_time,
+          property_name: visit.property_name || existingActiveVisit.property_name,
+          notes: (existingActiveVisit.notes || '') + `\n[Rescheduled by Zorvo AI Agent on ${new Date().toLocaleDateString('en-US')}]`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existingActiveVisit.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      supabaseSaved = true;
+      savedVisit = data;
+    } else {
+      // ── Save to Supabase (New Booking)
+      const res = await saveVisitToSupabase({
+        ...visit,
+        agreement_id: visit.agreement_token || null,
+        qualification_id: visit.qualification_token || null,
+        status: 'confirmed',
+        created_at: new Date().toISOString()
+      });
+      if (!res.success) throw new Error(res.error);
+      supabaseSaved = true;
+      savedVisit = res.data;
+    }
+  } catch (supabaseError) {
+    console.warn('⚠️ Supabase connection failed, falling back to MongoDB Snapshots:', supabaseError.message);
+    
+    // FALLBACK TO MONGODB SNAPSHOTS
+    if (mongoose.connection.readyState !== 1) {
+      isReschedule = false;
+      savedVisit = { id: 'visit_' + Date.now(), created_at: new Date().toISOString() };
+    } else {
+      let snapshot = await DataSnapshot.findOne({ email: agentEmail });
+      if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: { pe_bookings: [] } });
+      let bookings = snapshot.data.pe_bookings || [];
+      if (typeof bookings === 'string') { try { bookings = JSON.parse(bookings); } catch (e) { bookings = []; } }
+
+      const existingMongoVisit = bookings.find(b => 
+        (visit.lead_id && b.lead_id === visit.lead_id) || 
+        (visit.client_phone && b.client_phone === visit.client_phone)
+      );
+
+      if (existingMongoVisit) {
+        isReschedule = true;
+        console.log(`🔄 Enforcing single-visit rule (MongoDB Fallback): Found active visit ${existingMongoVisit.id}. Rescheduling.`);
+        savedVisit = { 
+          id: existingMongoVisit.id, 
+          created_at: existingMongoVisit.created_at || new Date().toISOString() 
+        };
+      } else {
+        isReschedule = false;
+        savedVisit = { 
+          id: 'visit_' + Date.now(), 
+          created_at: new Date().toISOString() 
+        };
+      }
+    }
   }
 
   const realId = savedVisit.id;
-  console.log(`📌 Generated Supabase Visit ID: ${realId}`);
+  console.log(`📌 Supabase/MongoDB Visit ID (Reschedule: ${isReschedule}): ${realId}`);
 
   // --- BACKGROUND PROCESSING ---
   (async () => {
     try {
       // Save to MongoDB
-      let snapshot = await DataSnapshot.findOne({ email: agentEmail });
-      if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: { pe_bookings: [] } });
-      let bookings = snapshot.data.pe_bookings || [];
-      if (typeof bookings === 'string') { try { bookings = JSON.parse(bookings); } catch (e) { bookings = []; } }
-      
-      const dashboardVisit = { ...visit, id: realId, status: 'confirmed', created_at: new Date().toISOString() };
-      bookings.unshift(dashboardVisit);
-      
-      snapshot.data.pe_bookings = typeof snapshot.data.pe_bookings === 'string' ? JSON.stringify(bookings) : bookings;
-      snapshot.markModified('data');
-      await snapshot.save();
+      if (mongoose.connection.readyState === 1) {
+        let snapshot = await DataSnapshot.findOne({ email: agentEmail });
+        if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: { pe_bookings: [] } });
+        let bookings = snapshot.data.pe_bookings || [];
+        if (typeof bookings === 'string') { try { bookings = JSON.parse(bookings); } catch (e) { bookings = []; } }
+        
+        if (isReschedule) {
+          const idx = bookings.findIndex(b => b.id === realId);
+          if (idx !== -1) {
+            bookings[idx] = {
+              ...bookings[idx],
+              visit_date: visit.visit_date,
+              visit_time: visit.visit_time,
+              property_name: visit.property_name || bookings[idx].property_name,
+              notes: (bookings[idx].notes || '') + `\n[Rescheduled by Zorvo AI Agent]`
+            };
+          } else {
+            bookings.unshift({
+              ...visit,
+              id: realId,
+              status: 'confirmed',
+              created_at: savedVisit.created_at || new Date().toISOString()
+            });
+          }
+        } else {
+          const dashboardVisit = { ...visit, id: realId, status: 'confirmed', created_at: new Date().toISOString() };
+          bookings.unshift(dashboardVisit);
+        }
+        
+        snapshot.data.pe_bookings = typeof snapshot.data.pe_bookings === 'string' ? JSON.stringify(bookings) : bookings;
+        snapshot.markModified('data');
+        await snapshot.save();
+      }
 
       // ── Notify Agent (Dashboard & Email)
-      await notifyAgent(agentEmail, {
-        title: `🛎️ New Visit: ${visit.client_name}`,
-        description: `Property: ${visit.property_name}\nDate: ${visit.visit_date} at ${visit.visit_time}\nPhone: ${visit.client_phone}`,
-        type: 'booking',
-        icon: '📅',
-        emailSubject: `🛎️ AGENT ALERT: New Visit Request - ${visit.client_name}`
-      });
+      if (isReschedule) {
+        await notifyAgent(agentEmail, {
+          title: `🔄 Visit Rescheduled: ${visit.client_name}`,
+          description: `Property: ${visit.property_name}\nNEW Date: ${visit.visit_date} at ${visit.visit_time}\nPhone: ${visit.client_phone}`,
+          type: 'booking',
+          icon: '📅',
+          emailSubject: `🔄 AGENT ALERT: Visit Rescheduled - ${visit.client_name}`
+        });
+      } else {
+        await notifyAgent(agentEmail, {
+          title: `🛎️ New Visit: ${visit.client_name}`,
+          description: `Property: ${visit.property_name}\nDate: ${visit.visit_date} at ${visit.visit_time}\nPhone: ${visit.client_phone}`,
+          type: 'booking',
+          icon: '📅',
+          emailSubject: `🛎️ AGENT ALERT: New Visit Request - ${visit.client_name}`
+        });
+      }
 
       // Client Confirmation Email
       if (visit.client_email) {
@@ -932,18 +1051,85 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
             }
           }
         } catch (e) { console.error('Lookup address error:', e.message); }
-
+ 
         const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
         const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
         const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
-
+ 
         const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propertyAddress)}`;
-
-        await sendEmail({
-          to: visit.client_email,
-          subject: `🏡 CONFIRMED: Your property viewing at ${visit.property_name}`,
-          message: `Hi ${visit.client_name},\n\nYour property viewing for ${visit.property_name} is confirmed!\n\nDate: ${visit.visit_date}\nTime: ${visit.visit_time}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nWe look forward to meeting you!`,
-          html: `
+ 
+        if (isReschedule) {
+          await sendEmail({
+            to: visit.client_email,
+            subject: `🔄 RESCHEDULED: Your property viewing at ${visit.property_name}`,
+            message: `Hi ${visit.client_name},\n\nYour property viewing has been successfully rescheduled!\n\nNew Date: ${visit.visit_date}\nNew Time: ${visit.visit_time}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nWe look forward to meeting you!`,
+            html: `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
+  <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
+    <h1 style="margin:0;color:#c5a059;font-size:24px;font-weight:300;letter-spacing:2px">🔄 VISIT RESCHEDULED</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,0.6);font-size:14px">${agencyName} Premium Showings</p>
+  </div>
+  <div style="padding:32px;color:#faf8f4">
+    <p style="font-size:16px;line-height:1.6;color:rgba(255,255,255,0.85)">
+      Hi <strong>${visit.client_name}</strong>,
+    </p>
+    <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8)">
+      Your showing for <strong>${visit.property_name}</strong> has been successfully rescheduled to a new time slot:
+    </p>
+ 
+    <!-- Details Box -->
+    <div style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:24px;margin:24px 0">
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);width:120px;font-weight:600">🏠 Property</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visit.property_name}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">📅 NEW Date</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visit.visit_date}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">⏰ NEW Time</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visit.visit_time}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);vertical-align:top;font-weight:600">📍 Location</td>
+          <td style="padding:8px 0;color:#faf8f4;line-height:1.4">
+            ${propertyAddress}<br>
+            <a href="${mapUrl}" target="_blank" style="display:inline-block;margin-top:6px;color:#c5a059;text-decoration:none;font-weight:600;font-size:12px">🗺️ Open in Google Maps →</a>
+          </td>
+        </tr>
+      </table>
+    </div>
+ 
+    <!-- Agent Card -->
+    <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+      <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">📋 YOUR REPRESENTATIVE</h3>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div>
+          <div style="font-weight:bold;font-size:16px;color:#faf8f4">${agentName}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px">${agencyName} Advisor</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6">
+            📱 Phone: <strong>${agentPhone}</strong><br>
+            ✉️ Email: <strong>${AGENT_EMAIL}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+ 
+    <div style="margin-top:32px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3)">
+      Need to make another change? Simply reply to this thread.<br>
+      © ${new Date().getFullYear()} ${agencyName}. All rights reserved.
+    </div>
+  </div>
+</div>`
+          });
+        } else {
+          await sendEmail({
+            to: visit.client_email,
+            subject: `🏡 CONFIRMED: Your property viewing at ${visit.property_name}`,
+            message: `Hi ${visit.client_name},\n\nYour property viewing for ${visit.property_name} is confirmed!\n\nDate: ${visit.visit_date}\nTime: ${visit.visit_time}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nWe look forward to meeting you!`,
+            html: `
 <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
   <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
     <h1 style="margin:0;color:#c5a059;font-size:24px;font-weight:300;letter-spacing:2px">🏡 VISIT CONFIRMED</h1>
@@ -956,7 +1142,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
     <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8)">
       Your private viewing for the premium listing <strong>${visit.property_name}</strong> has been successfully booked and confirmed. Please find your showing itinerary details below:
     </p>
-
+ 
     <!-- Details Box -->
     <div style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:24px;margin:24px 0">
       <table style="width:100%;border-collapse:collapse;font-size:14px">
@@ -981,7 +1167,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
         </tr>
       </table>
     </div>
-
+ 
     <!-- Agent Card -->
     <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
       <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">📋 ASSIGNED REAL ESTATE ADVISOR</h3>
@@ -996,14 +1182,15 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
         </div>
       </div>
     </div>
-
+ 
     <div style="margin-top:32px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3)">
       Please notify us at least 24 hours in advance if you need to reschedule.<br>
       © ${new Date().getFullYear()} ${agencyName}. All rights reserved.
     </div>
   </div>
 </div>`
-        });
+          });
+        }
       }
 
       // Trigger AI Confirmation Call
