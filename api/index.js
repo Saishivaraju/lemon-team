@@ -2761,35 +2761,134 @@ Please check the market and contact them within 5 hours.
                         : (snap.data.pe_campaign_queue || []);
           let status = snap.data.pe_campaign_status || 'IDLE';
 
-          if (status === 'RUNNING' && queue.length > 0) {
-            console.log(`🚀 Campaign running. ${queue.length} leads remaining in queue.`);
-            const nextLeadId = queue.shift();
-            
-            snap.data.pe_campaign_queue = JSON.stringify(queue);
-            
-            if (queue.length === 0) {
-              snap.data.pe_campaign_status = 'COMPLETED';
-              console.log('🏁 Campaign completed.');
-            }
-            
-            snap.markModified('data');
-            await snap.save();
+          let stats = snap.data.pe_campaign_stats ? (typeof snap.data.pe_campaign_stats === 'string' ? JSON.parse(snap.data.pe_campaign_stats) : snap.data.pe_campaign_stats) : null;
+          if (!stats) {
+            stats = { totalLeads: queue.length + 1, callsCompleted: 0, bookings: 0, followUps: 0, noAnswers: 0, notInterested: 0 };
+          }
 
-            const { createClient } = require('@supabase/supabase-js');
-            const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-            let { data: nextLeadData } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
-            if (!nextLeadData) {
-               let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
-               nextLeadData = tLeadData;
-            }
+          let attempts = snap.data.pe_campaign_attempts ? (typeof snap.data.pe_campaign_attempts === 'string' ? JSON.parse(snap.data.pe_campaign_attempts) : snap.data.pe_campaign_attempts) : {};
+          const currentLeadAttempts = attempts[finalLeadId] || 0;
 
-            if (nextLeadData && nextLeadData.phone) {
-               console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
-               setTimeout(() => {
-                 triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
-               }, 5000);
+          const isUnanswered = isFailed || duration < 10;
+          const outcome = isUnanswered ? 'NO ANSWER' : (aiIntelligence.outcome || 'FOLLOW UP');
+
+          // Log outcome on the current lead in snapshot too!
+          await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, {
+            call_outcome: outcome,
+            last_call_time: new Date().toISOString()
+          });
+
+          if (status === 'RUNNING') {
+            let proceedToNext = false;
+
+            if (isUnanswered) {
+              if (currentLeadAttempts === 0) {
+                // First call: No Answer -> Wait 5 Minutes -> Retry
+                attempts[finalLeadId] = 1;
+                snap.data.pe_campaign_attempts = JSON.stringify(attempts);
+                
+                console.log(`⏳ Lead ${phone} did not answer. Scheduling 5-minute retry before moving to next lead.`);
+                
+                const leadToRetry = { 
+                  id: finalLeadId,
+                  phone, 
+                  name: call.customer?.name || metadata.name || 'there', 
+                  email: metadata.email || '',
+                  property_interest: metadata.interest || '',
+                  budget: metadata.budget || ''
+                };
+                
+                setTimeout(() => {
+                  triggerAICall(leadToRetry).catch(e => console.error('Campaign retry call failed:', e));
+                }, 5 * 60 * 1000); // 5 minutes
+                
+              } else {
+                // Second call: No Answer -> Create Follow-Up Task, Notify Agent, Stop Calling
+                attempts[finalLeadId] = 2;
+                snap.data.pe_campaign_attempts = JSON.stringify(attempts);
+                stats.callsCompleted++;
+                stats.noAnswers++;
+                
+                console.log(`⛔ Lead ${phone} did not answer on 2nd attempt. Creating task and progressing to next lead.`);
+                
+                // Create follow up task
+                const { createClient } = require('@supabase/supabase-js');
+                const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+                await sb.from('tasks').insert({
+                  title: `Unanswered Call Follow Up: ${call.customer?.name || phone}`,
+                  description: `Lead failed to pick up two sequential campaign calls. Please call manually.`,
+                  due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                  priority: 'high',
+                  status: 'pending'
+                });
+
+                // Notify Agent
+                await sendEmail({
+                  to: AGENT_EMAIL,
+                  subject: `[ZORVO ALERT] Campaign Call Unanswered: ${call.customer?.name || phone}`,
+                  html: `<div style="font-family:sans-serif; padding:20px; background:#05070a; color:#dee4ed; border:1px solid #c5a059; border-radius:10px;">
+                    <h3>Unanswered Campaign Lead Alert</h3>
+                    <p>Lead <b>${call.customer?.name || phone}</b> failed to answer two sequential campaign call attempts.</p>
+                    <p>A high-priority manual follow-up task has been logged in your dashboard.</p>
+                  </div>`
+                });
+
+                proceedToNext = true;
+              }
             } else {
-               console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
+              // Answered call -> process stats
+              stats.callsCompleted++;
+              if (outcome === 'BOOKED') stats.bookings++;
+              else if (outcome === 'FOLLOW UP') stats.followUps++;
+              else if (outcome === 'NOT INTERESTED') stats.notInterested++;
+              
+              proceedToNext = true;
+            }
+
+            snap.data.pe_campaign_stats = JSON.stringify(stats);
+
+            if (proceedToNext) {
+              if (queue.length > 0) {
+                const nextLeadId = queue.shift();
+                console.log(`🚀 Campaign moving to next lead in queue. ${queue.length} remaining.`);
+                
+                snap.data.pe_campaign_queue = JSON.stringify(queue);
+                
+                if (queue.length === 0) {
+                  snap.data.pe_campaign_status = 'COMPLETED';
+                  console.log('🏁 Campaign completed.');
+                }
+                
+                snap.markModified('data');
+                await snap.save();
+
+                const { createClient } = require('@supabase/supabase-js');
+                const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+                let { data: nextLeadData } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
+                if (!nextLeadData) {
+                   let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
+                   nextLeadData = tLeadData;
+                }
+
+                if (nextLeadData && nextLeadData.phone) {
+                   console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
+                   setTimeout(() => {
+                     triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
+                   }, 5000);
+                } else {
+                   console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
+                }
+              } else {
+                snap.data.pe_campaign_status = 'COMPLETED';
+                snap.data.pe_campaign_queue = JSON.stringify([]);
+                console.log('🏁 Campaign completed.');
+                snap.markModified('data');
+                await snap.save();
+              }
+            } else {
+              // Just save the state for retries
+              snap.markModified('data');
+              await snap.save();
             }
           }
         }

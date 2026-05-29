@@ -34,7 +34,8 @@ JSON Schema Required:
   "closing_probability": number, // 0 to 100 representing percentage likelihood of closing based on urgency and budget
   "call_summary": "Concise 3-4 sentence summary of the call",
   "ai_notes": "Actionable next steps for the human agent",
-  "extracted_budget_numeric": number // Extract the stated budget as a pure number, e.g. 600000. Use 0 if not mentioned.
+  "extracted_budget_numeric": number, // Extract the stated budget as a pure number, e.g. 600000. Use 0 if not mentioned.
+  "outcome": "BOOKED" | "FOLLOW UP" | "NOT INTERESTED" // BOOKED if appointment was successfully scheduled, FOLLOW UP if interested but needs another call, NOT INTERESTED if rejects
 }
 
 Logic Rules:
@@ -77,7 +78,8 @@ function _getFallbackIntelligence() {
     call_summary: 'Call completed but AI analysis was unavailable or transcript was empty.',
     ai_notes: 'Review the recording to manually qualify this lead.',
     extracted_budget_numeric: 0,
-    potential_commission: 0
+    potential_commission: 0,
+    outcome: 'FOLLOW UP'
   };
 }
 

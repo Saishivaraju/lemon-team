@@ -5020,9 +5020,24 @@
       <div class="panel" id="panel-leads">
         <div class="sec-head">
           <div class="sec-title">Lead Management</div>
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-ghost" onclick="document.getElementById('csv-file-input').click()"><i class="fas fa-file-import"></i> Import CSV</button>
+            <input type="file" id="csv-file-input" style="display:none" accept=".csv" onchange="importCSVLeads(event)" />
             <button class="btn" style="background:var(--accent); color:#000; font-weight:bold" onclick="startAICampaign()"><i class="fas fa-play"></i> Start AI Campaign</button>
             <button class="btn btn-primary" onclick="openModal('addLead')">+ New Lead</button>
+          </div>
+        </div>
+
+        <!-- FLOATING SELECTION BAR -->
+        <div id="selection-bar" style="display:none; justify-content:space-between; align-items:center; background:rgba(255, 204, 51, 0.1); border:1px solid rgba(255,204,51,0.2); padding:14px 24px; border-radius:12px; margin-bottom:16px;">
+          <div style="display:flex; align-items:center; gap:16px">
+            <input type="checkbox" id="select-all-checkbox" style="width:18px; height:18px; cursor:pointer" onchange="toggleSelectAll(this.checked)" />
+            <label for="select-all-checkbox" style="font-weight:bold; color:var(--text); cursor:pointer; font-size:14px">Select All Leads</label>
+            <span style="width:1px; height:20px; background:var(--border)"></span>
+            <span id="selected-count-label" style="font-weight:bold; color:var(--accent); font-size:14px">0 Leads Selected</span>
+          </div>
+          <div style="display:flex; gap:10px">
+            <button class="btn btn-primary btn-sm" onclick="startSelectedAICampaign()"><i class="fas fa-play"></i> Start Selected AI Campaign</button>
           </div>
         </div>
         
@@ -6633,6 +6648,7 @@
     // APP STATE
     // ================================================================
     let state = { leads: [], properties: [], bookings: [], notifications: [], agent: {} };
+    let selectedLeadIds = [];
     let leadFilter = 'all', propFilter = 'all';
     let currentLeadId = null;
     let pendingImages = [];
@@ -7297,9 +7313,16 @@
           
           <!-- Header -->
           <div style="display:flex; justify-content:space-between; align-items:flex-start">
-            <div>
-              <div style="font-weight:900; color:#fff; font-size:18px">${l.name}</div>
-              <div style="font-size:12px; color:var(--muted); margin-top:4px"><i class="fas fa-phone" style="font-size:10px"></i> ${l.phone || 'N/A'}</div>
+            <div style="display:flex; gap:12px; align-items:flex-start">
+              <input type="checkbox" style="width:18px; height:18px; margin-top:4px; cursor:pointer" ${selectedLeadIds.includes(l.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleLeadSelection('${l.id}', this.checked)" />
+              <div>
+                <div style="font-weight:900; color:#fff; font-size:18px">${l.name}</div>
+                <div style="font-size:12px; color:var(--muted); margin-top:4px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+                  <span><i class="fas fa-phone" style="font-size:10px"></i> ${l.phone || 'N/A'}</span>
+                  ${l.call_outcome ? `<span style="background:rgba(255,255,255,0.05); padding:2px 6px; border-radius:4px; font-size:10px; border:1px solid rgba(255,255,255,0.1)">📞 ${l.call_outcome}</span>` : ''}
+                  ${l.last_call_time ? `<span style="font-size:10px; color:var(--muted)">🕒 ${new Date(l.last_call_time).toLocaleTimeString()}</span>` : ''}
+                </div>
+              </div>
             </div>
             <span class="badge ${bc[l.status] || ''}">${l.status}</span>
           </div>
@@ -10699,6 +10722,15 @@ ${date}`;
       const ids = activeLeads.map(l => l.id);
       DB.set('pe_campaign_queue', ids);
       DB.set('pe_campaign_status', 'RUNNING');
+      DB.set('pe_campaign_stats', {
+        totalLeads: ids.length,
+        callsCompleted: 0,
+        bookings: 0,
+        followUps: 0,
+        noAnswers: 0,
+        notInterested: 0
+      });
+      DB.set('pe_campaign_attempts', {});
       
       toast(`🚀 Starting AI Campaign with ${ids.length} leads...`);
       renderCampaignStatus();
@@ -10717,22 +10749,194 @@ ${date}`;
     function renderCampaignStatus() {
        const status = DB.get('pe_campaign_status') || 'IDLE';
        const queue = DB.get('pe_campaign_queue') || [];
+       const stats = DB.get('pe_campaign_stats') || { totalLeads: 0, callsCompleted: 0, bookings: 0, followUps: 0, noAnswers: 0, notInterested: 0 };
        const banner = document.getElementById('campaign-status-banner');
        if (!banner) return;
        
-       if (status === 'RUNNING') {
-          banner.style.display = 'flex';
-          banner.style.background = 'rgba(46,204,138,0.1)';
-          banner.style.borderColor = 'rgba(46,204,138,0.3)';
-          banner.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--green); border-radius:50%; box-shadow: 0 0 10px var(--green)"></div> <b style="color:var(--green)">AI Campaign Running</b> - <span style="color:var(--text)">${queue.length} leads remaining in queue</span></div> <button class="btn btn-ghost btn-sm" onclick="stopAICampaign()" style="color:var(--red); border-color:var(--red)">Pause Campaign</button>`;
-       } else if (status === 'PAUSED') {
-          banner.style.display = 'flex';
-          banner.style.background = 'rgba(240,192,64,0.1)';
-          banner.style.borderColor = 'rgba(240,192,64,0.3)';
-          banner.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--accent); border-radius:50%"></div> <b style="color:var(--accent)">AI Campaign Paused</b> - <span style="color:var(--text)">${queue.length} leads remaining in queue</span></div> <button class="btn btn-primary btn-sm" onclick="startAICampaign()">Resume Campaign</button>`;
+       if (status === 'RUNNING' || status === 'COMPLETED' || status === 'PAUSED') {
+          banner.style.display = 'block';
+          banner.style.background = status === 'RUNNING' ? 'rgba(46,204,138,0.05)' : status === 'PAUSED' ? 'rgba(240,192,64,0.05)' : 'rgba(197,160,89,0.05)';
+          banner.style.borderColor = status === 'RUNNING' ? 'rgba(46,204,138,0.2)' : status === 'PAUSED' ? 'rgba(240,192,64,0.2)' : 'rgba(197,160,89,0.2)';
+          banner.style.padding = '20px';
+          
+          let headerText = '';
+          let actionBtn = '';
+          if (status === 'RUNNING') {
+            headerText = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--green); border-radius:50%; box-shadow: 0 0 10px var(--green)"></div> <b style="color:var(--green); font-size:16px">AI Campaign Running</b></div>`;
+            actionBtn = `<button class="btn btn-ghost btn-sm" onclick="stopAICampaign()" style="color:var(--red); border-color:var(--red)"><i class="fas fa-pause"></i> Pause</button>`;
+          } else if (status === 'PAUSED') {
+            headerText = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--accent); border-radius:50%"></div> <b style="color:var(--accent); font-size:16px">AI Campaign Paused</b></div>`;
+            actionBtn = `<button class="btn btn-primary btn-sm" onclick="startAICampaign()"><i class="fas fa-play"></i> Resume</button>`;
+          } else {
+            headerText = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--accent); border-radius:50%"></div> <b style="color:var(--accent); font-size:16px">AI Campaign Completed Safely 🏁</b></div>`;
+            actionBtn = `<button class="btn btn-ghost btn-sm" onclick="clearCampaignStatus()"><i class="fas fa-times"></i> Dismiss</button>`;
+          }
+
+          banner.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px">
+              ${headerText}
+              ${actionBtn}
+            </div>
+            
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap:12px; margin-bottom:14px">
+              <div style="background:var(--surface2); padding:10px; border-radius:8px; text-align:center; border:1px solid var(--border)">
+                <div style="font-size:11px; color:var(--muted); text-transform:uppercase">Total Leads</div>
+                <div style="font-size:18px; font-weight:bold; margin-top:4px">${stats.totalLeads || queue.length || 0}</div>
+              </div>
+              <div style="background:var(--surface2); padding:10px; border-radius:8px; text-align:center; border:1px solid var(--border)">
+                <div style="font-size:11px; color:var(--muted); text-transform:uppercase">Completed</div>
+                <div style="font-size:18px; font-weight:bold; margin-top:4px; color:var(--text)">${stats.callsCompleted || 0}</div>
+              </div>
+              <div style="background:var(--surface2); padding:10px; border-radius:8px; text-align:center; border:1px solid var(--border)">
+                <div style="font-size:11px; color:var(--muted); text-transform:uppercase; color:var(--green)">Bookings</div>
+                <div style="font-size:18px; font-weight:bold; margin-top:4px; color:var(--green)">${stats.bookings || 0}</div>
+              </div>
+              <div style="background:var(--surface2); padding:10px; border-radius:8px; text-align:center; border:1px solid var(--border)">
+                <div style="font-size:11px; color:var(--muted); text-transform:uppercase; color:var(--accent)">Follow-ups</div>
+                <div style="font-size:18px; font-weight:bold; margin-top:4px; color:var(--accent)">${stats.followUps || 0}</div>
+              </div>
+              <div style="background:var(--surface2); padding:10px; border-radius:8px; text-align:center; border:1px solid var(--border)">
+                <div style="font-size:11px; color:var(--muted); text-transform:uppercase; color:var(--red)">No Answer</div>
+                <div style="font-size:18px; font-weight:bold; margin-top:4px; color:var(--red)">${stats.noAnswers || 0}</div>
+              </div>
+              <div style="background:var(--surface2); padding:10px; border-radius:8px; text-align:center; border:1px solid var(--border)">
+                <div style="font-size:11px; color:var(--muted); text-transform:uppercase; color:var(--blue)">Not Interested</div>
+                <div style="font-size:18px; font-weight:bold; margin-top:4px; color:var(--blue)">${stats.notInterested || 0}</div>
+              </div>
+            </div>
+            
+            ${status === 'RUNNING' ? `
+              <div style="width:100%; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden">
+                <div style="width:${((stats.callsCompleted || 0) / (stats.totalLeads || 1)) * 100}%; height:100%; background:var(--green); transition:width 0.4s ease"></div>
+              </div>
+            ` : ''}
+          `;
        } else {
           banner.style.display = 'none';
        }
+    }
+
+    function clearCampaignStatus() {
+      DB.set('pe_campaign_status', 'IDLE');
+      renderCampaignStatus();
+      syncToDB();
+    }
+
+    function toggleLeadSelection(id, checked) {
+      if (checked) {
+        if (!selectedLeadIds.includes(id)) selectedLeadIds.push(id);
+      } else {
+        selectedLeadIds = selectedLeadIds.filter(x => x !== id);
+      }
+      renderSelectionBar();
+    }
+
+    function toggleSelectAll(checked) {
+      const activeLeads = state.leads.filter(l => l.status === 'New' || l.status === 'Contacted');
+      if (checked) {
+        selectedLeadIds = activeLeads.map(l => l.id);
+      } else {
+        selectedLeadIds = [];
+      }
+      renderLeads();
+      renderSelectionBar();
+    }
+
+    function renderSelectionBar() {
+      const bar = document.getElementById('selection-bar');
+      const countLabel = document.getElementById('selected-count-label');
+      const selectAll = document.getElementById('select-all-checkbox');
+      
+      if (!bar || !countLabel) return;
+      
+      const activeLeads = state.leads.filter(l => l.status === 'New' || l.status === 'Contacted');
+      
+      if (selectedLeadIds.length > 0) {
+        bar.style.display = 'flex';
+        countLabel.textContent = `${selectedLeadIds.length} Lead${selectedLeadIds.length > 1 ? 's' : ''} Selected`;
+        if (selectAll) {
+          selectAll.checked = selectedLeadIds.length === activeLeads.length;
+        }
+      } else {
+        bar.style.display = 'none';
+        if (selectAll) selectAll.checked = false;
+      }
+    }
+
+    async function startSelectedAICampaign() {
+      if (selectedLeadIds.length === 0) return toast('No leads selected.', true);
+      
+      DB.set('pe_campaign_queue', [...selectedLeadIds]);
+      DB.set('pe_campaign_status', 'RUNNING');
+      
+      toast(`🚀 Starting campaign with ${selectedLeadIds.length} selected leads...`);
+      selectedLeadIds = [];
+      renderSelectionBar();
+      renderLeads();
+      renderCampaignStatus();
+      syncToDB();
+      
+      triggerAICall(DB.get('pe_campaign_queue')[0]);
+    }
+
+    function importCSVLeads(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        const lines = text.split(/\r?\n/);
+        if (lines.length <= 1) return toast('CSV is empty.', true);
+
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+        const nameIdx = headers.indexOf('name');
+        const phoneIdx = headers.indexOf('phone');
+        const emailIdx = headers.indexOf('email');
+
+        if (nameIdx === -1 || phoneIdx === -1) {
+          return toast('CSV must contain "Name" and "Phone" columns.', true);
+        }
+
+        let count = 0;
+        for (let i = 1; i < lines.length; i++) {
+          if (!lines[i].trim()) continue;
+          
+          const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim());
+          
+          const name = cols[nameIdx];
+          const phone = cols[phoneIdx];
+          const email = emailIdx !== -1 ? cols[emailIdx] : '';
+
+          if (name && phone) {
+            DB.add(DB.LEADS, {
+              name,
+              phone,
+              email: email || '',
+              status: 'New',
+              source: 'CSV Import',
+              qualification_score: 50,
+              notes: 'Imported via CSV. Default state: Not Called.',
+              lead_score: 'COLD',
+              priority: 'LONG TERM NURTURE',
+              intent: 'Unknown',
+              timeline: 'Unknown',
+              potential_commission: 0,
+              created_at: new Date().toISOString()
+            });
+            count++;
+          }
+        }
+
+        if (count > 0) {
+          state.leads = DB.getAll(DB.LEADS);
+          renderAll();
+          toast(`Successfully imported ${count} leads!`);
+        } else {
+          toast('No valid leads imported.', true);
+        }
+      };
+      reader.readAsText(file);
     }
 
     async function sendAgentAlert(title, msg) {
