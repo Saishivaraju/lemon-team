@@ -7925,7 +7925,7 @@
         try {
           await fetch('/api/visits', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
+            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
             body: JSON.stringify({ agentEmail: state.agent.email, visit: saved })
           });
           sendAgentAlert('Property Visit Scheduled', `You have a new tour with <b>${name}</b> for <b>${saved.property_name}</b> on ${date} at ${time}.`);
@@ -8347,7 +8347,7 @@
           if (recipients.length > 0) {
             fetch('/api/sms/blast', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
+              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
               body: JSON.stringify({ recipients, message: msg })
             }).catch(e => console.error('SMS Blast failed:', e));
           }
@@ -11006,7 +11006,7 @@ ${date}`;
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-secret': 'zorvo_secret_2026'
+            'x-api-secret': 'propedge_secret_2026'
           },
           body: JSON.stringify({
             to: state.agent.email || 'saishivaraju.m2002@gmail.com',
@@ -11035,7 +11035,7 @@ ${date}`;
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-secret': 'zorvo_secret_2026'
+            'x-api-secret': 'propedge_secret_2026'
           },
           body: JSON.stringify({
             to: visit.client_email,
