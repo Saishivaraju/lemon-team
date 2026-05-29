@@ -5019,8 +5019,15 @@
       </div>
       <div class="panel" id="panel-leads">
         <div class="sec-head">
-          <div class="sec-title">Lead Management</div><button class="btn btn-primary" onclick="openModal('addLead')">+
-            New Lead</button>
+          <div class="sec-title">Lead Management</div>
+          <div style="display:flex; gap:10px;">
+            <button class="btn" style="background:var(--accent); color:#000; font-weight:bold" onclick="startAICampaign()"><i class="fas fa-play"></i> Start AI Campaign</button>
+            <button class="btn btn-primary" onclick="openModal('addLead')">+ New Lead</button>
+          </div>
+        </div>
+        
+        <!-- CAMPAIGN STATUS BANNER -->
+        <div id="campaign-status-banner" style="display:none; justify-content:space-between; align-items:center; background:rgba(46,204,138,0.1); border:1px solid rgba(46,204,138,0.3); padding:14px 24px; border-radius:12px; margin-bottom:16px;">
         </div>
 
 
@@ -6883,6 +6890,7 @@
       renderTeam();
       renderSettings();
       renderIntegrations();
+      if (typeof renderCampaignStatus === 'function') renderCampaignStatus();
 
       // Elite Performance Layer
       renderDailyActionPlan();
@@ -10657,6 +10665,49 @@ ${date}`;
         console.error('Manual trigger error:', err);
         toast('Failed to trigger call. Server offline?', true);
       }
+    }
+
+    async function startAICampaign() {
+      const activeLeads = state.leads.filter(l => l.status === 'New' || l.status === 'Contacted');
+      if (activeLeads.length === 0) return toast('No active leads found to call.', true);
+      
+      const ids = activeLeads.map(l => l.id);
+      DB.set('pe_campaign_queue', ids);
+      DB.set('pe_campaign_status', 'RUNNING');
+      
+      toast(`🚀 Starting AI Campaign with ${ids.length} leads...`);
+      renderCampaignStatus();
+      syncToDB(); // Sync queue to backend so webhook can process it
+      
+      triggerAICall(ids[0]);
+    }
+    
+    function stopAICampaign() {
+      DB.set('pe_campaign_status', 'PAUSED');
+      toast('⏸️ Campaign Paused');
+      renderCampaignStatus();
+      syncToDB();
+    }
+    
+    function renderCampaignStatus() {
+       const status = DB.get('pe_campaign_status') || 'IDLE';
+       const queue = DB.get('pe_campaign_queue') || [];
+       const banner = document.getElementById('campaign-status-banner');
+       if (!banner) return;
+       
+       if (status === 'RUNNING') {
+          banner.style.display = 'flex';
+          banner.style.background = 'rgba(46,204,138,0.1)';
+          banner.style.borderColor = 'rgba(46,204,138,0.3)';
+          banner.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--green); border-radius:50%; box-shadow: 0 0 10px var(--green)"></div> <b style="color:var(--green)">AI Campaign Running</b> - <span style="color:var(--text)">${queue.length} leads remaining in queue</span></div> <button class="btn btn-ghost btn-sm" onclick="stopAICampaign()" style="color:var(--red); border-color:var(--red)">Pause Campaign</button>`;
+       } else if (status === 'PAUSED') {
+          banner.style.display = 'flex';
+          banner.style.background = 'rgba(240,192,64,0.1)';
+          banner.style.borderColor = 'rgba(240,192,64,0.3)';
+          banner.innerHTML = `<div style="display:flex; align-items:center; gap:10px;"><div style="width:10px; height:10px; background:var(--accent); border-radius:50%"></div> <b style="color:var(--accent)">AI Campaign Paused</b> - <span style="color:var(--text)">${queue.length} leads remaining in queue</span></div> <button class="btn btn-primary btn-sm" onclick="startAICampaign()">Resume Campaign</button>`;
+       } else {
+          banner.style.display = 'none';
+       }
     }
 
     async function sendAgentAlert(title, msg) {

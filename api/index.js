@@ -2211,6 +2211,7 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 // VAPI WEBHOOK — Receives all call events from VAPI
 // Set this URL in your VAPI dashboard: /api/vapi/webhook
 // =============================================================================
+const processedWebhooks = new Set();
 app.post('/api/vapi/webhook', async (req, res) => {
   const event = req.body;
   const type = event?.message?.type || event?.type;
@@ -2444,6 +2445,17 @@ Please check the market and contact them within 5 hours.
 
     // ── end-of-call-report — call ended, save everything ────────────────────
     else if (type === 'end-of-call-report') {
+      const callId = event?.message?.call?.id || event?.call?.id;
+      if (callId && processedWebhooks.has(callId)) {
+        console.log(`[Idempotency] Webhook already processed for call ${callId}`);
+        return res.json({ received: true, duplicate: true });
+      }
+      if (callId) processedWebhooks.add(callId);
+      if (processedWebhooks.size > 1000) {
+        const iterator = processedWebhooks.values();
+        for (let i = 0; i < 200; i++) processedWebhooks.delete(iterator.next().value);
+      }
+
       const report = event?.message || {};
       const transcript = report.transcript || '';
       const recording = report.recordingUrl || null;
@@ -2709,6 +2721,51 @@ Please check the market and contact them within 5 hours.
           }
         } catch (e) { console.error('VAPI followup property fetch error:', e.message); }
         await scheduleFollowUps(leadForFollowup, followupProperties);
+      }
+
+      // ── Process Sequential Campaign Queue ──────────────────────────────────────
+      try {
+        const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        if (snap && snap.data) {
+          let queue = typeof snap.data.pe_campaign_queue === 'string' 
+                        ? JSON.parse(snap.data.pe_campaign_queue) 
+                        : (snap.data.pe_campaign_queue || []);
+          let status = snap.data.pe_campaign_status || 'IDLE';
+
+          if (status === 'RUNNING' && queue.length > 0) {
+            console.log(`🚀 Campaign running. ${queue.length} leads remaining in queue.`);
+            const nextLeadId = queue.shift();
+            
+            snap.data.pe_campaign_queue = JSON.stringify(queue);
+            
+            if (queue.length === 0) {
+              snap.data.pe_campaign_status = 'COMPLETED';
+              console.log('🏁 Campaign completed.');
+            }
+            
+            snap.markModified('data');
+            await snap.save();
+
+            const { createClient } = require('@supabase/supabase-js');
+            const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+            let { data: nextLeadData } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
+            if (!nextLeadData) {
+               let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
+               nextLeadData = tLeadData;
+            }
+
+            if (nextLeadData && nextLeadData.phone) {
+               console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
+               setTimeout(() => {
+                 triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
+               }, 5000);
+            } else {
+               console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
+            }
+          }
+        }
+      } catch (queueErr) {
+        console.error('❌ Error processing campaign queue:', queueErr.message);
       }
     }
 
