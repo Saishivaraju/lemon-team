@@ -35,7 +35,9 @@ JSON Schema Required:
   "call_summary": "Concise 3-4 sentence summary of the call",
   "ai_notes": "Actionable next steps for the human agent",
   "extracted_budget_numeric": number, // Extract the stated budget as a pure number, e.g. 600000. Use 0 if not mentioned.
-  "outcome": "BOOKED" | "FOLLOW UP" | "NOT INTERESTED" // BOOKED if appointment was successfully scheduled, FOLLOW UP if interested but needs another call, NOT INTERESTED if rejects
+  "outcome": "BOOKED" | "FOLLOW UP" | "NOT INTERESTED", // BOOKED if appointment was successfully scheduled, FOLLOW UP if interested but needs another call, NOT INTERESTED if rejects
+  "extracted_email": "string" | null, // Normalize and clean any spoken email (e.g. "john at gmail dot com" -> "john@gmail.com"). Use null if not mentioned.
+  "extracted_phone": "string" | null // Normalize and clean any spoken phone number to standard digits with plus sign (e.g. "plus one two three..." -> "+1234567890"). Use null if not mentioned.
 }
 
 Logic Rules:
@@ -79,7 +81,9 @@ function _getFallbackIntelligence() {
     ai_notes: 'Review the recording to manually qualify this lead.',
     extracted_budget_numeric: 0,
     potential_commission: 0,
-    outcome: 'FOLLOW UP'
+    outcome: 'FOLLOW UP',
+    extracted_email: null,
+    extracted_phone: null
   };
 }
 

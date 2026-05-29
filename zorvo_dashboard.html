@@ -6489,8 +6489,26 @@
             for (const key in data) {
               const val = typeof data[key] === 'string' ? data[key] : JSON.stringify(data[key]);
               if (localStorage.getItem(key) !== val) {
-                localStorage.setItem(key, val);
-                changed = true;
+                let isDifferent = true;
+                if (key === 'pe_leads' || key === 'pe_bookings' || key === 'pe_properties') {
+                  try {
+                    const localObj = JSON.parse(localStorage.getItem(key) || '[]');
+                    const remoteObj = JSON.parse(val || '[]');
+                    
+                    const normalize = (obj) => {
+                      if (!obj) return '';
+                      return JSON.stringify(obj, Object.keys(obj).sort());
+                    };
+                    if (normalize(localObj) === normalize(remoteObj)) {
+                      isDifferent = false;
+                    }
+                  } catch (e) {}
+                }
+                
+                if (isDifferent) {
+                  localStorage.setItem(key, val);
+                  changed = true;
+                }
               }
             }
 
@@ -6771,8 +6789,8 @@
       }
     });
 
-    // Real-time synchronization polling (every 5 seconds)
-    setInterval(syncFromDB, 5000);
+    // Real-time synchronization polling (every 15 seconds)
+    setInterval(syncFromDB, 15000);
 
     // Trigger Strategic Onboarding V2
     checkOnboarding();

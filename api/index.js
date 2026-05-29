@@ -2487,8 +2487,8 @@ Please check the market and contact them within 5 hours.
 
       const extractedLead = {
         name: call.customer?.name || metadata.name || null,
-        phone: phone || call.customer?.number || metadata.phone || null,
-        email: metadata.email || call.customer?.email || structuredData.email || structuredData.client_email || null,
+        phone: phone || call.customer?.number || aiIntelligence.extracted_phone || metadata.phone || null,
+        email: metadata.email || call.customer?.email || aiIntelligence.extracted_email || structuredData.email || structuredData.client_email || null,
         budget: aiIntelligence.extracted_budget_numeric || structuredData.budget || metadata.budget || null,
         bhk_preference: structuredData.bhk_preference || structuredData.bhkPreference || structuredData.bhk || null,
         pre_approval_status: structuredData.pre_approval_status || structuredData.preApprovalStatus || structuredData.preApproval || null,
