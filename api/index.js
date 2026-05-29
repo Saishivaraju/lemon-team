@@ -3197,6 +3197,34 @@ app.delete('/api/followups/:phone', protect, async (req, res) => {
   }
 });
 
+// ── POST /api/followups/manual — manually send the welcome email ──────────────
+app.post('/api/followups/manual', protect, async (req, res) => {
+  try {
+    const { leadId } = req.body;
+    if (!leadId) return res.status(400).json({ error: 'leadId is required' });
+
+    const DataSnapshot = mongoose.models.DataSnapshot || mongoose.model('DataSnapshot');
+    const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+    if (!snap || !snap.data) return res.status(404).json({ error: 'No data found' });
+
+    let leads = typeof snap.data.pe_leads === 'string' ? JSON.parse(snap.data.pe_leads) : (snap.data.pe_leads || []);
+    let properties = typeof snap.data.pe_properties === 'string' ? JSON.parse(snap.data.pe_properties) : (snap.data.pe_properties || []);
+
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return res.status(404).json({ error: 'Lead not found' });
+    if (!lead.email) return res.status(400).json({ error: 'Lead does not have an email address' });
+
+    const followupService = require('../services/followup');
+    const emailData = followupService.buildDay0Email(lead, properties);
+    const { sendEmail } = require('../services/email');
+    const result = await sendEmail({ to: lead.email, subject: emailData.subject, html: emailData.html, message: emailData.plain });
+    
+    res.json({ success: result.success, result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/followups/test — send test email immediately ──────────────────
 app.post('/api/followups/test', protect, async (req, res) => {
   try {

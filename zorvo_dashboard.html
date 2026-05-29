@@ -5410,6 +5410,25 @@
             </div>
           </div>
 
+          <!-- MANUAL FOLLOW-UP -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-paper-plane"></i> Instant Manual Follow-Up</div>
+            </div>
+            <div class="card-body">
+              <p style="font-size:12px; color:var(--muted); margin-bottom:15px">Instantly send the automated Day 0 (Welcome + Properties) email to a specific lead. This email includes our website link and property locations.</p>
+              <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px">
+                <div>
+                  <label class="form-label">Select Lead</label>
+                  <select id="manual-followup-lead-select" class="form-input"></select>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="sendManualFollowUp()" id="btn-manual-followup">
+                <i class="fas fa-paper-plane"></i> Send Instant Follow-Up
+              </button>
+            </div>
+          </div>
+
         </div>
       </div>
 
@@ -11607,6 +11626,7 @@ ${date}`;
       const el1 = document.getElementById('doc-lead-select'); if(el1) el1.innerHTML = '<option value="">Select Lead...</option>' + ls;
       const el2 = document.getElementById('tour-lead-select'); if(el2) el2.innerHTML = '<option value="">Select Lead...</option>' + ls;
       const el3 = document.getElementById('email-drip-lead-select'); if(el3) el3.innerHTML = '<option value="">Select Lead...</option>' + ls;
+      const el4 = document.getElementById('manual-followup-lead-select'); if(el4) el4.innerHTML = '<option value="">Select Lead...</option>' + ls;
       const el4 = document.getElementById('tour-props-select'); if(el4) el4.innerHTML = ps;
       
       renderDocVault();
@@ -11723,6 +11743,37 @@ ${date}`;
         else toast('Failed to send email', true);
       } catch(e) {
         toast('Email error', true);
+      }
+    }
+
+    async function sendManualFollowUp() {
+      const leadId = document.getElementById('manual-followup-lead-select').value;
+      if (!leadId) return toast('Please select a lead first', true);
+
+      const btn = document.getElementById('btn-manual-followup');
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/followups/manual', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('zorvo_token')}` },
+          body: JSON.stringify({ leadId })
+        });
+        const data = await res.json();
+        
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Instant Follow-Up';
+        btn.disabled = false;
+
+        if (data.success) {
+          toast('Manual follow-up email sent successfully! 📧');
+        } else {
+          toast(data.error || 'Failed to send manual follow-up', true);
+        }
+      } catch (err) {
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Instant Follow-Up';
+        btn.disabled = false;
+        toast('Connection error', true);
       }
     }
 
