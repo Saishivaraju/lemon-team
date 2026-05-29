@@ -5072,20 +5072,7 @@
         <div class="card">
 
           <div class="card-body" style="padding:0">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Phone</th>
-                  <th>Property Interest</th>
-                  <th>Status</th>
-                  <th>Source</th>
-                  <th>Notes</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="leads-tbody"></tbody>
-            </table>
+            <div id="leads-grid" class="intelligence-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 20px; padding: 20px;"></div>
           </div>
         </div>
       </div>
@@ -7279,51 +7266,89 @@
 
       if (document.getElementById('lead-new-today')) document.getElementById('lead-new-today').textContent = newToday + ' New Today';
 
-      document.getElementById('leads-tbody').innerHTML = filtered.map((l, i) => {
-        const score = l.score || 0;
-        const sentiment = score >= 85 ? '<span class="sentiment-badge sentiment-hot"><i class="fas fa-fire"></i> HOT</span>' : score >= 60 ? '<span class="sentiment-badge sentiment-maybe"><i class="fas fa-hourglass-half"></i> WARM</span>' : '<span class="sentiment-badge sentiment-cold"><i class="fas fa-snowflake"></i> COLD</span>';
+      const grid = document.getElementById('leads-grid');
+      if (!grid) return;
 
-        // Simulating "Active Now" for the first few leads
-        const isActive = i < 2;
-        const budgetClass = (l.budget || 550000) > 800000 ? 'budget-high' : (l.budget || 550000) > 400000 ? 'budget-mid' : 'budget-low';
+      grid.innerHTML = filtered.map((l, i) => {
+        const score = l.lead_score || (l.score >= 85 ? 'HOT' : l.score >= 60 ? 'WARM' : 'COLD');
+        const scoreColor = score === 'HOT' ? 'var(--red)' : score === 'WARM' ? 'var(--accent)' : 'var(--blue)';
+        const priority = l.priority || 'FOLLOW UP';
+        const intent = l.intent || 'Unknown';
+        const timeline = l.timeline || 'Unknown';
+        const commission = l.potential_commission || 0;
+        const prob = l.qualification_score || 50;
+        const objections = l.objections || [];
+        const callSummary = l.call_summary || l.notes || 'No summary available.';
+        const aiNotes = l.ai_notes || '';
 
-        // Contextual Actions based on status
         let actionBtn = '';
         if (l.status === 'New' || l.status === 'Qualified') {
-          actionBtn = `<button class="btn-action-ctx btn-action-call" onclick="triggerAICall('${l.id}')"><i class="fas fa-phone"></i> Intro Call</button>`;
+          actionBtn = `<button class="btn-action-ctx btn-action-call" style="flex:1" onclick="triggerAICall('${l.id}')"><i class="fas fa-phone"></i> Intro Call</button>`;
         } else if (l.status === 'Contacted') {
-          actionBtn = `<button class="btn-action-ctx btn-action-book" onclick="showVisitModal('${l.id}')"><i class="fas fa-calendar-plus"></i> Book Tour</button>`;
+          actionBtn = `<button class="btn-action-ctx btn-action-book" style="flex:1" onclick="showVisitModal('${l.id}')"><i class="fas fa-calendar-plus"></i> Book Tour</button>`;
         } else if (l.status === 'Negotiation') {
-          actionBtn = `<button class="btn-action-ctx btn-action-send" onclick="generateContract('${l.id}')"><i class="fas fa-file-signature"></i> Send Offer</button>`;
+          actionBtn = `<button class="btn-action-ctx btn-action-send" style="flex:1" onclick="generateContract('${l.id}')"><i class="fas fa-file-signature"></i> Send Offer</button>`;
         } else {
-          actionBtn = `<button class="btn-action-ctx btn-action-call" style="background:var(--surface2); color:var(--muted)"><i class="fas fa-history"></i> Log Action</button>`;
+          actionBtn = `<button class="btn-action-ctx btn-action-call" style="flex:1; background:var(--surface2); color:var(--muted)"><i class="fas fa-history"></i> Log Action</button>`;
         }
 
         return `
-        <tr onclick="viewLead('${l.id}')" class="elite-table-row" style="cursor:pointer">
-          <td data-label="Name">
-            <div style="display:flex; align-items:center">
-              ${isActive ? '<span class="active-pulse"></span>' : ''}
-              <div>
-                <div style="font-weight:900; color:#fff; font-size:14px">${l.name}</div>
-                <div style="font-size:10px; color:var(--muted); margin-top:2px">${l.id}</div>
+        <div class="intel-card" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:16px; box-shadow:0 4px 20px rgba(0,0,0,0.2)">
+          
+          <!-- Header -->
+          <div style="display:flex; justify-content:space-between; align-items:flex-start">
+            <div>
+              <div style="font-weight:900; color:#fff; font-size:18px">${l.name}</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:4px"><i class="fas fa-phone" style="font-size:10px"></i> ${l.phone || 'N/A'}</div>
+            </div>
+            <span class="badge ${bc[l.status] || ''}">${l.status}</span>
+          </div>
+
+          <!-- Intelligence Row -->
+          <div style="display:flex; gap:10px; align-items:center; background:var(--surface2); padding:10px; border-radius:8px">
+            <span style="background:${scoreColor}20; color:${scoreColor}; padding:4px 8px; border-radius:4px; font-weight:bold; font-size:11px; letter-spacing:1px"><i class="fas fa-fire"></i> ${score}</span>
+            <span style="color:var(--text); font-weight:bold; font-size:11px; letter-spacing:0.5px">⚡ ${priority}</span>
+            <div style="margin-left:auto; text-align:right">
+              <div style="font-size:10px; color:var(--muted); text-transform:uppercase">Closing Prob.</div>
+              <div style="font-weight:900; color:var(--green)">${prob}%</div>
+            </div>
+          </div>
+
+          <!-- Insights Row -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:12px">
+            <div><span style="color:var(--muted)">Intent:</span> <b style="color:#fff">${intent}</b></div>
+            <div><span style="color:var(--muted)">Timeline:</span> <b style="color:#fff">${timeline}</b></div>
+            <div><span style="color:var(--muted)">Budget:</span> <b style="color:#fff">$${fmtNum(l.budget || 0)}</b></div>
+            <div><span style="color:var(--muted)">Commission:</span> <b style="color:var(--accent)">$${fmtNum(commission)}</b></div>
+          </div>
+
+          <!-- Analysis Block -->
+          <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.05); border-radius:8px; padding:12px; font-size:12px; color:var(--text); line-height:1.5; flex:1">
+            <div style="font-weight:bold; color:var(--muted); margin-bottom:6px; font-size:10px; text-transform:uppercase">Call Summary</div>
+            <div style="margin-bottom:10px">${callSummary}</div>
+            
+            ${objections && objections.length > 0 ? `
+              <div style="font-weight:bold; color:var(--red); margin-bottom:6px; font-size:10px; text-transform:uppercase">Detected Objections</div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px">
+                ${objections.map(obj => `<span style="background:rgba(255,77,77,0.1); border:1px solid rgba(255,77,77,0.3); color:var(--red); padding:2px 8px; border-radius:4px; font-size:10px">${obj}</span>`).join('')}
               </div>
-            </div>
-          </td>
-          <td data-label="Sentiment">${sentiment}</td>
-          <td data-label="Interest" style="font-size:12px; font-weight:700">${l.property_interest || 'General'}</td>
-          <td data-label="Status"><span class="badge ${bc[l.status] || ''}">${l.status}</span></td>
-          <td data-label="Budget" class="${budgetClass}">$${fmtNum(l.budget || 550000)}</td>
-          <td data-label="Source" style="font-size:11px; color:var(--muted)">${l.source || 'Website'}</td>
-          <td data-label="Actions" onclick="event.stopPropagation()">
-            <div style="display:flex; gap:10px; align-items:center">
-              ${actionBtn}
-              ${l.email ? `<button class="btn btn-ghost btn-sm" style="width:32px; height:32px; padding:0; color:var(--accent)" onclick="event.stopPropagation();sendLeadEmail('${l.id}','followup')" title="Send Email"><i class="fas fa-envelope"></i></button>` : ''}
-              <button class="btn btn-danger btn-sm" style="width:32px; height:32px; padding:0" onclick="quickDeleteLead('${l.id}')"><i class="fas fa-trash-can"></i></button>
-            </div>
-          </td>
-        </tr>`;
-      }).join('') || '<tr><td colspan="7" class="table-empty">No leads found</td></tr>';
+            ` : ''}
+            
+            ${aiNotes ? `
+              <div style="font-weight:bold; color:var(--accent); margin-top:10px; margin-bottom:6px; font-size:10px; text-transform:uppercase">AI Recommendation</div>
+              <div style="color:var(--accent)">${aiNotes}</div>
+            ` : ''}
+          </div>
+
+          <!-- Actions Footer -->
+          <div style="display:flex; gap:10px; margin-top:10px">
+            ${actionBtn}
+            ${l.email ? `<button class="btn btn-ghost btn-sm" style="width:40px; padding:0; color:var(--accent); border:1px solid var(--border)" onclick="sendLeadEmail('${l.id}','followup')" title="Send Email"><i class="fas fa-envelope"></i></button>` : ''}
+            <button class="btn btn-danger btn-sm" style="width:40px; padding:0" onclick="quickDeleteLead('${l.id}')"><i class="fas fa-trash-can"></i></button>
+          </div>
+
+        </div>`;
+      }).join('') || '<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--muted)">No intelligence profiles found.</div>';
     }
 
 

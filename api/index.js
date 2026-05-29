@@ -2481,17 +2481,31 @@ Please check the market and contact them within 5 hours.
       const analysis = event?.message?.analysis || event?.analysis || event?.message?.call?.analysis || {};
       const structuredData = analysis.structuredData || {};
 
+      // AI INTELLIGENCE EXTRACTION
+      const { analyzeTranscript } = require('../services/intelligence.js');
+      const aiIntelligence = await analyzeTranscript(transcript);
+
       const extractedLead = {
         name: call.customer?.name || metadata.name || null,
         phone: phone || call.customer?.number || metadata.phone || null,
         email: metadata.email || call.customer?.email || structuredData.email || structuredData.client_email || null,
-        budget: structuredData.budget || metadata.budget || null,
+        budget: aiIntelligence.extracted_budget_numeric || structuredData.budget || metadata.budget || null,
         bhk_preference: structuredData.bhk_preference || structuredData.bhkPreference || structuredData.bhk || null,
         pre_approval_status: structuredData.pre_approval_status || structuredData.preApprovalStatus || structuredData.preApproval || null,
         property_interest: structuredData.property_interest || structuredData.propertyInterest || metadata.interest || null,
-        notes: analysis.summary || transcript.substring(0, 500) || null,
+        notes: aiIntelligence.call_summary || analysis.summary || transcript.substring(0, 500) || null,
         status: 'Contacted',
-        qualification_score: parseInt(structuredData.qualification_score || structuredData.score || (structuredData.pre_approval_status === 'yes' ? 90 : 70)) || 70
+        qualification_score: aiIntelligence.closing_probability || parseInt(structuredData.qualification_score || structuredData.score || (structuredData.pre_approval_status === 'yes' ? 90 : 70)) || 70,
+        
+        // NEW INTELLIGENCE FIELDS
+        lead_score: aiIntelligence.lead_score || 'WARM',
+        priority: aiIntelligence.priority || 'FOLLOW UP',
+        intent: aiIntelligence.intent || 'Unknown',
+        timeline: aiIntelligence.timeline || 'Unknown',
+        objections: aiIntelligence.objections || [],
+        potential_commission: aiIntelligence.potential_commission || 0,
+        call_summary: aiIntelligence.call_summary || analysis.summary || '',
+        ai_notes: aiIntelligence.ai_notes || ''
       };
 
       // 3. Find and update the existing lead in database and dashboard snapshot
@@ -2532,7 +2546,15 @@ Please check the market and contact them within 5 hours.
         if (extractedLead.pre_approval_status) updates.pre_approval_status = extractedLead.pre_approval_status;
         if (extractedLead.property_interest) updates.property_interest = extractedLead.property_interest;
         if (extractedLead.qualification_score) updates.qualification_score = extractedLead.qualification_score;
-        if (extractedLead.notes) updates.notes = (existingLead.data.notes ? existingLead.data.notes + '\n' : '') + `[AI Call Summary]: ${extractedLead.notes}`;
+        
+        // Add new intelligence fields to Supabase updates if applicable
+        if (extractedLead.lead_score) updates.lead_score = extractedLead.lead_score;
+        if (extractedLead.priority) updates.priority = extractedLead.priority;
+        if (extractedLead.intent) updates.intent = extractedLead.intent;
+        if (extractedLead.timeline) updates.timeline = extractedLead.timeline;
+        if (extractedLead.potential_commission) updates.potential_commission = extractedLead.potential_commission;
+        
+        if (extractedLead.notes) updates.notes = (existingLead.data.notes ? existingLead.data.notes + '\n\n' : '') + `[AI Call Summary]: ${extractedLead.call_summary}\n[AI Notes]: ${extractedLead.ai_notes}\n[Objections]: ${extractedLead.objections.join(', ')}`;
         updates.stage = 'contacted';
         updates.updated_at = new Date().toISOString();
 
@@ -2566,6 +2588,13 @@ Please check the market and contact them within 5 hours.
           email: extractedLead.email || '',
           property_interest: extractedLead.property_interest || 'General Inquiry',
           budget: extractedLead.budget || 'Flexible',
+          lead_score: extractedLead.lead_score || 'WARM',
+          priority: extractedLead.priority || 'FOLLOW UP',
+          intent: extractedLead.intent || 'Unknown',
+          timeline: extractedLead.timeline || 'Unknown',
+          potential_commission: extractedLead.potential_commission || 0,
+          qualification_score: extractedLead.qualification_score || 70,
+          notes: (extractedLead.notes ? `[AI Call Summary]: ${extractedLead.call_summary}\n[AI Notes]: ${extractedLead.ai_notes}\n[Objections]: ${extractedLead.objections.join(', ')}` : ''),
           bhk_preference: extractedLead.bhk_preference || 'N/A',
           pre_approval_status: extractedLead.pre_approval_status || 'N/A',
           qualification_score: extractedLead.qualification_score || 50,
