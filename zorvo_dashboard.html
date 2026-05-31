@@ -6638,13 +6638,6 @@
 
       seedDemo() {
         [
-          { name: 'Omar Al-Farsi', phone: '+971 50 111 2222', email: 'omar@email.com', property_interest: '3BR Villa, Palm District', status: 'New', score: 94, notes: 'Very interested, budget confirmed.', source: 'WhatsApp', pipeline_stage: 'New' },
-          { name: 'David Chen', phone: '+852 91 234 567', email: 'david@email.com', property_interest: '2BR, Riverside', status: 'Contacted', score: 81, notes: 'Prefers morning tours.', source: 'Website', pipeline_stage: 'Negotiation' },
-          { name: 'Layla Hassan', phone: '+971 55 333 4444', email: 'layla@email.com', property_interest: '2BR Apartment, Marina Bay', status: 'Contacted', score: 67, notes: 'Comparing 3 properties.', source: 'Social', pipeline_stage: 'Negotiation' },
-          { name: 'Ali Hassan', phone: '+971 50 777 8888', email: 'ali@email.com', property_interest: '3BR, Skyview', status: 'Closed', score: 95, notes: 'Deal closed at $920K!', source: 'WhatsApp', pipeline_stage: 'Closed' },
-        ].forEach(l => this.insert(this.LEADS, l));
-
-        [
           { name: 'Skyview Residences', address: 'Downtown, Dubai', price: 1200000, bedrooms: '3', bathrooms: '2', area_sqft: 2100, status: 'For Sale', emoji: 'Apartment', views: 234, description: 'Masterpiece of modern architecture set against Dubai\'s skyline.', images: ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&q=80', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80'], latitude: 25.2048, longitude: 55.2708 },
           { name: 'Marina Tower Suite', address: 'Dubai Marina', price: 850000, bedrooms: '2', bathrooms: '2', area_sqft: 1450, status: 'For Sale', emoji: 'Apartment', views: 189, description: 'Uninterrupted sea views with wraparound balcony.', images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=80', 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=600&q=80'], latitude: 25.0804, longitude: 55.1403 },
           { name: 'Palm Villa Estate', address: 'Palm Jumeirah', price: 2400000, bedrooms: '5+', bathrooms: '5+', area_sqft: 6800, status: 'Pending', emoji: 'Villa', views: 312, description: 'Extraordinary beachfront villa with private beach and infinity pool.', images: ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&q=80', 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80', 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&q=80', 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80'], latitude: 25.1124, longitude: 55.1390 },
@@ -6661,14 +6654,8 @@
         }
         if (!localStorage.getItem('pe_int')) this.set('pe_int', { google: { connected: false } });
         if (!localStorage.getItem('pe_opts')) this.set('pe_opts', { email: true, sms: true, whatsapp: true, auto: true });
-        // Seed demo data if empty
         if (!this.getAll(this.LEADS).length) {
-          [
-            { name: 'Omar Al-Farsi', phone: '+971 50 111 2222', email: 'omar@email.com', property_interest: '3BR Villa, Palm District', status: 'New', score: 94, notes: 'Very interested, budget confirmed.', source: 'WhatsApp', pipeline_stage: 'New' },
-            { name: 'David Chen', phone: '+852 91 234 567', email: 'david@email.com', property_interest: '2BR, Riverside', status: 'Contacted', score: 81, notes: 'Prefers morning tours.', source: 'Website', pipeline_stage: 'Negotiation' },
-            { name: 'Layla Hassan', phone: '+971 55 333 4444', email: 'layla@email.com', property_interest: '2BR Apartment, Marina Bay', status: 'Contacted', score: 67, notes: 'Comparing 3 properties.', source: 'Social', pipeline_stage: 'Negotiation' },
-            { name: 'Ali Hassan', phone: '+971 50 777 8888', email: 'ali@email.com', property_interest: '3BR, Skyview', status: 'Closed', score: 95, notes: 'Deal closed at $920K!', source: 'WhatsApp', pipeline_stage: 'Closed' },
-          ].forEach(l => this.insert(this.LEADS, l));
+          // No mock leads injected. Start with a clean slate for real data.
         }
         if (!this.getAll(this.PROPERTIES).length) {
           [
