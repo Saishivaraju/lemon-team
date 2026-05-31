@@ -11959,7 +11959,7 @@ ${date}`;
       try {
         const res = await fetch(`/api/leads/${leadId}/trigger-call`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.sessionToken}` },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ lead })
         });
         const data = await res.json();
