@@ -7297,6 +7297,8 @@
       renderAll(); toast('Lead deleted.');
     }
 
+    let leadSearch = '';
+
     function renderLeads() {
       const bc = { 'New': 'badge-new', 'Contacted': 'badge-contacted', 'Closed': 'badge-closed', 'Qualified': 'badge-confirmed', 'Negotiation': 'badge-scheduled' };
       const calls = DB.getAll('pe_calls') || [];
@@ -7307,6 +7309,17 @@
          const scoreB = b.lead_score || b.score || 0;
          return scoreB - scoreA;
       });
+
+      // Apply text search filter
+      if (leadSearch) {
+        const q = leadSearch.toLowerCase();
+        filtered = filtered.filter(l =>
+          (l.name || '').toLowerCase().includes(q) ||
+          (l.phone || '').toLowerCase().includes(q) ||
+          (l.email || '').toLowerCase().includes(q) ||
+          (l.property_interest || '').toLowerCase().includes(q)
+        );
+      }
 
       if (leadFilter.startsWith('src:')) {
         const src = leadFilter.slice(4);
@@ -10605,11 +10618,8 @@ ${date}`;
     // GLOBAL SEARCH
     // ================================================================
     function globalSearch(q) {
-      if (!q.trim()) return renderLeads();
-      const filtered = state.leads.filter(l => l.name.toLowerCase().includes(q.toLowerCase()) || (l.property_interest || '').toLowerCase().includes(q.toLowerCase()) || (l.email || '').toLowerCase().includes(q.toLowerCase()));
-      const bc = { 'New': 'badge-new', 'Contacted': 'badge-contacted', 'Closed': 'badge-closed' };
-      const sc = s => s >= 80 ? 'score-h' : s >= 50 ? 'score-m' : 'score-l';
-      document.getElementById('leads-tbody').innerHTML = filtered.map(l => `<tr><td style="font-weight:600">${l.name}</td><td style="color:var(--muted)">${l.phone || '—'}</td><td>${l.property_interest || '—'}</td><td><span class="badge ${bc[l.status] || ''}">${l.status}</span></td><td><span class="score ${sc(l.score)}">${l.score}</span></td><td>${l.source || '—'}</td><td>${l.notes || '—'}</td><td><button class="btn btn-ghost btn-sm" onclick="viewLead('${l.id}')"><i class="fas fa-eye"></i> View</button></td></tr>`).join('') || '<tr><td colspan="8" class="table-empty">No results</td></tr>';
+      leadSearch = q.trim();
+      renderLeads();
     }
 
 
@@ -11934,6 +11944,89 @@ ${date}`;
 
       document.getElementById('omni-timeline-content').innerHTML = timelineHtml;
       modal.style.display = 'flex';
+    }
+
+    // ============================================================
+    // RESTORED MISSING FUNCTIONS
+    // ============================================================
+
+    // 1. AI Intro Call — triggers instant AI call for a lead via API
+    async function triggerLeadCall(leadId) {
+      const lead = state.leads.find(l => l.id === leadId);
+      if (!lead) return toast('Lead not found.', true);
+      if (!lead.phone) return toast('No phone number for this lead.', true);
+      toast(`🤖 Triggering AI Intro Call for ${lead.name}...`);
+      try {
+        const res = await fetch(`/api/leads/${leadId}/trigger-call`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${state.sessionToken}` },
+          body: JSON.stringify({ lead })
+        });
+        const data = await res.json();
+        if (data.success) {
+          toast(`✅ AI Call dispatched to ${lead.name} (${lead.phone})`);
+        } else {
+          toast(`❌ Call failed: ${data.error || 'Unknown error'}`, true);
+        }
+      } catch(e) {
+        toast(`❌ Network error: ${e.message}`, true);
+      }
+    }
+
+    // 2. Profile photo upload — reads file and sets as avatar background
+    function handlePhotoUpload(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const avatar = document.getElementById('s-avatar');
+        if (avatar) {
+          avatar.style.backgroundImage = `url(${e.target.result})`;
+          avatar.style.backgroundSize = 'cover';
+          avatar.style.backgroundPosition = 'center';
+          avatar.textContent = '';
+        }
+        // Persist to local agent record
+        const agent = DB.get(DB.AGENT) || {};
+        agent.photo = e.target.result;
+        DB.set(DB.AGENT, agent);
+        toast('Profile photo updated!');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // 3. Lightbox navigation — uses the simple lightbox (id="lightbox")
+    let _lbImages = [], _lbIdx = 0;
+    function lbNav(dir) {
+      const img = document.getElementById('lb-img');
+      const thumbs = document.getElementById('lb-thumbs');
+      const counter = document.getElementById('lb-counter');
+      if (!_lbImages.length || !img) return;
+      _lbIdx = (_lbIdx + dir + _lbImages.length) % _lbImages.length;
+      img.src = _lbImages[_lbIdx];
+      if (counter) counter.textContent = `${_lbIdx + 1} / ${_lbImages.length}`;
+      if (thumbs) {
+        Array.from(thumbs.querySelectorAll('img')).forEach((t, i) => {
+          t.classList.toggle('active', i === _lbIdx);
+        });
+      }
+    }
+    // Patch openLightbox to also populate _lbImages
+    const _origOpenLightbox = window.openLightbox;
+    window.openLightbox = function(propId) {
+      const p = state.properties.find(x => x.id === propId);
+      if (p && p.images) { _lbImages = p.images; _lbIdx = 0; }
+      if (_origOpenLightbox) _origOpenLightbox(propId);
+    };
+
+    // 4. Global Agency Pulse — toggles an analytics summary toast
+    function toggleAgencyPulse() {
+      const leads = state.leads || [];
+      const hot = leads.filter(l => (l.score || 0) >= 85).length;
+      const warm = leads.filter(l => (l.score || 0) >= 60 && (l.score || 0) < 85).length;
+      const calls = DB.getAll('pe_calls').length;
+      const props = state.properties.length;
+      toast(`📊 Pulse: ${leads.length} leads (${hot} 🔥 hot, ${warm} 🟡 warm) · ${calls} calls · ${props} properties`);
     }
     
   </script>
