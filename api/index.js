@@ -59,7 +59,7 @@ async function triggerAICall(lead) {
     // If successful, we clear any previous retries. 
     // If it fails immediately (API error), we return the failure so the caller can schedule a retry.
     if (data.success) {
-      cancelRetry(lead.phone);
+      await cancelRetry(lead.phone);
     }
     return data;
   } catch (err) {
@@ -2467,7 +2467,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         await robustUpdateLeadStage(finalLeadId, 'Contacted');
         await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, { pipeline_stage: 'Contacted', status: 'Contacted' });
       }
-      if (phone) cancelRetry(phone);
+      if (phone) await cancelRetry(phone);
     }
     
     // ── assistant-request — VAPI wants assistant for inbound call ───────────
@@ -2957,7 +2957,7 @@ Please check the market and contact them within 5 hours.
           property_interest: metadata.interest || '',
           budget: metadata.budget || ''
         };
-        scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
+        await scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
       }
 
       // ── Schedule email follow-ups after call ends (Day 0 instant, 1, 2, 3)
@@ -3186,6 +3186,20 @@ app.get('/api/followups', protect, async (req, res) => {
   }
 });
 
+// ── GET /api/cron/retries — automated cron retries processor ───────────────────
+app.get('/api/cron/retries', async (req, res) => {
+  try {
+    console.log('⏰ Running automated cron retries check...');
+    await connectDB();
+    const retryService = require('../services/retry');
+    await retryService.processPendingRetries(triggerAICall, triggerFailoverMessages);
+    res.json({ success: true, message: 'Retry checks executed successfully.' });
+  } catch (err) {
+    console.error('Cron Retry Error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/cron/followups — automated cron drip processor ───────────────────
 app.get('/api/cron/followups', async (req, res) => {
   try {
@@ -3407,9 +3421,9 @@ app.post('/api/call-log', async (req, res) => {
     // Update lead stage to 'contacted' after first call
     if (leadId && status === 'answered') {
       await updateLeadStage(leadId, 'contacted');
-      cancelRetry(phone); // Cancel retries since call was answered
+      await cancelRetry(phone); // Cancel retries since call was answered
     } else if (status === 'no_answer') {
-      scheduleRetry({ phone, ...req.body }, triggerAICall);
+      await scheduleRetry({ phone, ...req.body }, triggerAICall);
     }
 
     res.json({ success: result.success, id: result.data?.id });
@@ -3480,10 +3494,10 @@ app.post('/api/leads/takeover-notify', async (req, res) => {
   }
 });
 // ── GET /api/retry-status — Check retry queue ────────────────────────────────
-app.get('/api/retry-status', protect, (req, res) => {
+app.get('/api/retry-status', protect, async (req, res) => {
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ error: 'phone required' });
-  res.json({ success: true, ...getRetryStatus(phone) });
+  res.json({ success: true, ...(await getRetryStatus(phone)) });
 });
 
 // =============================================================================
@@ -3496,7 +3510,7 @@ app.post('/api/leads/:id/takeover', protect, async (req, res) => {
     const { agentPhone, leadPhone, leadName } = req.body;
     if (!leadPhone) return res.status(400).json({ error: 'leadPhone required' });
 
-    cancelRetry(leadPhone); // Stop AI retries
+    await cancelRetry(leadPhone); // Stop AI retries
     await updateLeadStage(req.params.id, 'contacted');
 
     // Notify agent to call immediately

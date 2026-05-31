@@ -9,6 +9,10 @@
     {
       "path": "/api/cron/followups",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/retries",
+      "schedule": "* * * * *"
     }
   ]
 }
