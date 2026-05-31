@@ -11950,32 +11950,9 @@ ${date}`;
     // RESTORED MISSING FUNCTIONS
     // ============================================================
 
-    // 1. AI Intro Call — triggers instant AI call for a lead via API
-    async function triggerLeadCall(leadId) {
-      const lead = state.leads.find(l => l.id === leadId);
-      if (!lead) return toast('Lead not found.', true);
-      if (!lead.phone) return toast('No phone number for this lead.', true);
-      toast(`🤖 Triggering AI Intro Call for ${lead.name}...`);
-      try {
-        const res = await fetch(`/api/leads/${leadId}/trigger-call`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
-          body: JSON.stringify({ lead })
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          if (data.data && data.data.simulated) {
-            toast(`⚠️ Call simulated (VAPI_API_KEY not configured). Lead: ${lead.name}`);
-          } else {
-            toast(`✅ AI Call dispatched to ${lead.name} (${lead.phone})`);
-          }
-        } else {
-          const errMsg = data.error || (data.data && data.data.error) || 'Unknown error';
-          toast(`❌ Call failed: ${errMsg}`, true);
-        }
-      } catch(e) {
-        toast(`❌ Network error: ${e.message}`, true);
-      }
+    // 1. AI Intro Call — reuses the same working triggerAICall already used by campaigns
+    function triggerLeadCall(leadId) {
+      triggerAICall(leadId);
     }
 
     // 2. Profile photo upload — reads file and sets as avatar background
