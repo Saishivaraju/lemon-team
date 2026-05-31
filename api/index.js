@@ -1713,7 +1713,15 @@ app.post('/api/leads', async (req, res) => {
 
       lead.created_at = lead.created_at || new Date().toISOString();
       lead.id = lead.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
-      leads.unshift(lead);
+      
+      const existingIdx = leads.findIndex(l => (l.phone && l.phone === lead.phone) || (l.email && l.email === lead.email));
+      if (existingIdx !== -1) {
+        // Update existing lead instead of adding duplicate
+        leads[existingIdx] = { ...leads[existingIdx], ...lead, updated_at: new Date().toISOString() };
+        lead.id = leads[existingIdx].id;
+      } else {
+        leads.unshift(lead);
+      }
 
       snapshot.data.pe_leads = wasString ? JSON.stringify(leads) : leads;
       snapshot.markModified('data');
@@ -1875,7 +1883,12 @@ app.post('/api/notify-lead', async (req, res) => {
         }
 
         if (Array.isArray(leads)) {
-          leads.unshift(lead);
+          const existingIdx = leads.findIndex(l => (l.phone && l.phone === lead.phone) || (l.email && l.email === lead.email));
+          if (existingIdx !== -1) {
+            leads[existingIdx] = { ...leads[existingIdx], ...lead, updated_at: new Date().toISOString() };
+          } else {
+            leads.unshift(lead);
+          }
           snapshot.data.pe_leads = wasString ? JSON.stringify(leads) : leads;
           snapshot.markModified('data');
           await snapshot.save();

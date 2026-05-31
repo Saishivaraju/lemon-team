@@ -7341,11 +7341,9 @@
         const scoreLabel = score >= 85 ? '🔥 HOT' : score >= 60 ? '🟡 WARM' : '🧊 COLD';
         const scoreColor = score >= 85 ? 'var(--red)' : score >= 60 ? 'var(--accent)' : 'var(--blue)';
         
-        // Sentiment & Job Title Mock Enrichment
+        // Sentiment Enrichment
         const sentiment = score >= 85 ? '😊 Motivated' : score >= 60 ? '🤔 Exploring' : '🥱 Unresponsive';
-        const jobTitles = ['Software Engineer at TechCorp', 'Marketing Director', 'Small Business Owner', 'Doctor at City Hospital', 'Financial Analyst'];
-        const mockJob = jobTitles[i % jobTitles.length];
-
+        
         const intent = l.intent || 'Unknown';
         const budget = l.budget || 0;
 
@@ -7396,7 +7394,6 @@
 
               <div>
                 <div style="font-weight:900; color:#fff; font-size:16px; cursor:pointer" onclick="openOmniTimeline('${l.id}')">${l.name}</div>
-                <div style="font-size:11px; color:var(--muted); margin-top:2px"><i class="fab fa-linkedin" style="color:#0077b5"></i> ${mockJob}</div>
                 <div style="font-size:11px; color:var(--muted); margin-top:4px; display:flex; gap:12px; align-items:center">
                   <span><i class="fas fa-phone"></i> ${l.phone || 'N/A'}</span>
                 </div>
