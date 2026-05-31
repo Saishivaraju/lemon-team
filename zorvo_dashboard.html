@@ -7362,6 +7362,7 @@
             <button class="btn btn-sm" style="background:var(--accent); color:#000; font-weight:bold; font-size:11px" onclick="triggerLeadCall('${l.id}')"><i class="fas fa-robot"></i> AI Intro Call</button>
             <a href="tel:${l.phone}" class="btn btn-sm" style="background:var(--blue); color:#fff; font-weight:bold; text-decoration:none; display:flex; align-items:center; gap:5px; font-size:11px"><i class="fas fa-phone"></i> Agent Call</a>
             <button class="btn btn-sm" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); font-size:11px" onclick="showPanel('marketing'); setTimeout(()=>document.getElementById('manual-followup-lead-select').value='${l.id}', 100)"><i class="fas fa-envelope"></i> Followup Email</button>
+            <button class="btn btn-sm btn-primary" style="font-size:11px; font-weight:bold" onclick="showPanel('pipeline'); toast('Lead located in CRM Pipeline');"><i class="fas fa-bullseye"></i> Push to CRM</button>
           </div>
         `;
 
