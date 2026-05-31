@@ -11963,10 +11963,15 @@ ${date}`;
           body: JSON.stringify({ lead })
         });
         const data = await res.json();
-        if (data.success) {
-          toast(`✅ AI Call dispatched to ${lead.name} (${lead.phone})`);
+        if (res.ok && data.success) {
+          if (data.data && data.data.simulated) {
+            toast(`⚠️ Call simulated (VAPI_API_KEY not configured). Lead: ${lead.name}`);
+          } else {
+            toast(`✅ AI Call dispatched to ${lead.name} (${lead.phone})`);
+          }
         } else {
-          toast(`❌ Call failed: ${data.error || 'Unknown error'}`, true);
+          const errMsg = data.error || (data.data && data.data.error) || 'Unknown error';
+          toast(`❌ Call failed: ${errMsg}`, true);
         }
       } catch(e) {
         toast(`❌ Network error: ${e.message}`, true);

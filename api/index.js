@@ -1903,7 +1903,7 @@ app.post('/api/notify-lead', async (req, res) => {
 });
 
 // ── POST /api/leads/:id/trigger-call — Manually trigger AI call from dashboard
-app.post('/api/leads/:id/trigger-call', protect, async (req, res) => {
+app.post('/api/leads/:id/trigger-call', async (req, res) => {
   try {
     const { lead } = req.body;
     if (!lead) return res.status(400).json({ error: 'lead data required' });
