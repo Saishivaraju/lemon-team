@@ -10798,7 +10798,7 @@ ${date}`;
       syncToDB();
     }
     
-        function renderCampaignStatus() {
+            function renderCampaignStatus() {
        const status = DB.get('pe_campaign_status') || 'IDLE';
        const queue = DB.get('pe_campaign_queue') || [];
        const stats = DB.get('pe_campaign_stats') || { totalLeads: 0, callsCompleted: 0, bookings: 0, followUps: 0, noAnswers: 0, notInterested: 0 };
@@ -10820,14 +10820,44 @@ ${date}`;
           
           let actionBtn = '';
           if (status === 'RUNNING') {
-            actionBtn = `<button class="btn btn-ghost btn-sm" onclick="stopAICampaign()" style="color:var(--red); border-color:var(--red); border-radius:8px; font-weight:700; width:100%"><i class="fas fa-pause"></i> Pause Sequence</button>`;
+            actionBtn = '<button class="btn btn-ghost btn-sm" onclick="stopAICampaign()" style="color:var(--red); border-color:var(--red); border-radius:8px; font-weight:700; width:100%"><i class="fas fa-pause"></i> Pause Sequence</button>';
           } else if (status === 'PAUSED') {
-            actionBtn = `<button class="btn btn-primary btn-sm" onclick="startAICampaign()" style="border-radius:8px; font-weight:700; width:100%"><i class="fas fa-play"></i> Resume Campaign</button>`;
+            actionBtn = '<button class="btn btn-primary btn-sm" onclick="startAICampaign()" style="border-radius:8px; font-weight:700; width:100%"><i class="fas fa-play"></i> Resume Campaign</button>';
           } else {
-            actionBtn = `<button class="btn btn-ghost btn-sm" onclick="clearCampaignStatus()" style="color:var(--muted); border-color:var(--border); border-radius:8px; font-weight:700; width:100%"><i class="fas fa-times"></i> Dismiss Cockpit</button>`;
+            actionBtn = '<button class="btn btn-ghost btn-sm" onclick="clearCampaignStatus()" style="color:var(--muted); border-color:var(--border); border-radius:8px; font-weight:700; width:100%"><i class="fas fa-times"></i> Dismiss Cockpit</button>';
           }
 
           const queueLeads = queue.map(id => state.leads.find(l => l.id === id)).filter(Boolean);
+
+          // 1. Resolve Status Indicator (flat strings, no nested template backticks)
+          let statusIndicator = '';
+          if (status === 'RUNNING') {
+            statusIndicator = '<div class="pulse-gold" style="width: 12px; height: 12px; background: var(--green); border-radius: 50%; box-shadow: 0 0 12px var(--green)"></div><b style="color: var(--green); font-size: 17px; letter-spacing: -0.5px; font-family: var(--font-head)">AI Voice Campaign Active</b>';
+          } else if (status === 'PAUSED') {
+            statusIndicator = '<div style="width: 12px; height: 12px; background: var(--accent); border-radius: 50%"></div><b style="color: var(--accent); font-size: 17px; letter-spacing: -0.5px; font-family: var(--font-head)">AI Voice Campaign Paused</b>';
+          } else {
+            statusIndicator = '<div style="width: 12px; height: 12px; background: #c5a059; border-radius: 50%"></div><b style="color: #c5a059; font-size: 17px; letter-spacing: -0.5px; font-family: var(--font-head)">AI Campaign Completed 🏁</b>';
+          }
+
+          // 2. Resolve Progress Bar (flat template string)
+          let progressBarHtml = '';
+          if (status === 'RUNNING') {
+            const pct = ((stats.callsCompleted || 0) / (stats.totalLeads || 1)) * 100;
+            progressBarHtml = '<div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; margin-top: 8px;"><div style="width: ' + pct + '%; height: 100%; background: linear-gradient(90deg, var(--green), var(--accent)); transition: width 0.6s cubic-bezier(0.19, 1, 0.22, 1)"></div></div>';
+          }
+
+          // 3. Resolve Upcoming Queue List (flat strings joined)
+          let queueHtml = '';
+          if (queueLeads.length === 0) {
+            queueHtml = '<div style="font-size: 12px; color: var(--muted); font-style: italic; margin-top: 24px; text-align: center;">No more leads left in the queue.</div>';
+          } else {
+            queueHtml = queueLeads.map((l, index) => {
+              const name = l.name || 'Anonymous Lead';
+              const phone = l.phone || 'No phone number';
+              const idx = index + 1;
+              return '<div style="background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;" onmouseover="this.style.borderColor=\'rgba(197, 160, 89, 0.4)\'; this.style.background=\'rgba(255,255,255,0.03)\'" onmouseout="this.style.borderColor=\'var(--border)\'; this.style.background=\'rgba(255,255,255,0.01)\'"><div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 11px; font-weight: 800; color: #c5a059; width: 18px; text-align: center;">#' + idx + '</span><div><div style="font-size: 13px; font-weight: 600; color: var(--text)">' + name + '</div><div style="font-size: 11px; color: var(--muted)">' + phone + '</div></div></div><span style="font-size: 9px; background: rgba(255, 255, 255, 0.05); padding: 2px 8px; border-radius: 12px; color: var(--muted); font-weight: 800; text-transform: uppercase;">Up Next</span></div>';
+            }).join('');
+          }
 
           banner.innerHTML = `
             <div style="display: flex; gap: 24px; flex-wrap: wrap;">
@@ -10835,15 +10865,7 @@ ${date}`;
               <div style="flex: 1.2; min-width: 250px; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                   <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                    ${status === 'RUNNING' 
-                      ? `<div class="pulse-gold" style="width: 12px; height: 12px; background: var(--green); border-radius: 50%; box-shadow: 0 0 12px var(--green)"></div>
-                         <b style="color: var(--green); font-size: 17px; letter-spacing: -0.5px; font-family: var(--font-head)">AI Voice Campaign Active</b>`
-                      : status === 'PAUSED'
-                      ? `<div style="width: 12px; height: 12px; background: var(--accent); border-radius: 50%"></div>
-                         <b style="color: var(--accent); font-size: 17px; letter-spacing: -0.5px; font-family: var(--font-head)">AI Voice Campaign Paused</b>`
-                      : `<div style="width: 12px; height: 12px; background: #c5a059; border-radius: 50%"></div>
-                         <b style="color: #c5a059; font-size: 17px; letter-spacing: -0.5px; font-family: var(--font-head)">AI Campaign Completed 🏁</b>`
-                    }
+                    ${statusIndicator}
                   </div>
                   <p style="font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0 0 20px;">
                     Zorvo AI is dialing, qualifying, and scheduling live bookings for selected leads in your dashboard queue.
@@ -10882,11 +10904,7 @@ ${date}`;
                     <div style="font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--blue)">${stats.notInterested || 0}</div>
                   </div>
                 </div>
-                ${status === 'RUNNING' ? `
-                  <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; margin-top: 8px;">
-                    <div style="width: ${((stats.callsCompleted || 0) / (stats.totalLeads || 1)) * 100}%; height: 100%; background: linear-gradient(90deg, var(--green), var(--accent)); transition: width 0.6s cubic-bezier(0.19, 1, 0.22, 1)"></div>
-                  </div>
-                ` : ''}
+                ${progressBarHtml}
               </div>
 
               <!-- RIGHT COLUMN: Upcoming Campaign Queue -->
@@ -10895,21 +10913,7 @@ ${date}`;
                   <i class="fas fa-list-ol" style="color: #c5a059"></i> Live Lead Queue (${queueLeads.length})
                 </div>
                 <div style="flex: 1; max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
-                  ${queueLeads.length === 0 
-                    ? `<div style="font-size: 12px; color: var(--muted); font-style: italic; margin-top: 24px; text-align: center;">No more leads left in the queue.</div>`
-                    : queueLeads.map((l, index) => `
-                        <div style="background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; transition: all 0.2s;" onmouseover="this.style.borderColor='rgba(197, 160, 89, 0.4)'; this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.borderColor='var(--border)'; this.style.background='rgba(255,255,255,0.01)'">
-                          <div style="display: flex; align-items: center; gap: 8px;">
-                            <span style="font-size: 11px; font-weight: 800; color: #c5a059; width: 18px; text-align: center;">#${index + 1}</span>
-                            <div>
-                              <div style="font-size: 13px; font-weight: 600; color: var(--text)">${l.name || 'Anonymous Lead'}</div>
-                              <div style="font-size: 11px; color: var(--muted)">${l.phone || 'No phone number'}</div>
-                            </div>
-                          </div>
-                          <span style="font-size: 9px; background: rgba(255, 255, 255, 0.05); padding: 2px 8px; border-radius: 12px; color: var(--muted); font-weight: 800; text-transform: uppercase;">Up Next</span>
-                        </div>
-                      `).join('')
-                  }
+                  ${queueHtml}
                 </div>
               </div>
             </div>
