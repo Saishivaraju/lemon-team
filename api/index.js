@@ -2863,28 +2863,65 @@ Please check the market and contact them within 5 hours.
       const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
       let existingLead = null;
-      if (finalLeadId) {
-        let { data } = await sb.from('team_leads').select('*').eq('id', finalLeadId).single();
-        if (data) {
-          existingLead = { table: 'team_leads', data };
-        } else {
-          let { data: lData } = await sb.from('leads').select('*').eq('id', finalLeadId).single();
-          if (lData) existingLead = { table: 'leads', data: lData };
+      let mongoLeadFromSnapshot = null;
+
+      // FIRST: Check local MongoDB Snapshot for the lead by ID or phone number
+      try {
+        const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        if (snap && snap.data && snap.data.pe_leads) {
+          let leads = typeof snap.data.pe_leads === 'string'
+            ? JSON.parse(snap.data.pe_leads)
+            : snap.data.pe_leads;
+          if (Array.isArray(leads)) {
+            // Check by ID first
+            if (finalLeadId) {
+              mongoLeadFromSnapshot = leads.find(l => l.id == finalLeadId);
+            }
+            // Fallback: Check by Phone number
+            if (!mongoLeadFromSnapshot && phone) {
+              const normPhone = normalizePhone(phone);
+              mongoLeadFromSnapshot = leads.find(l => normalizePhone(l.phone) === normPhone);
+            }
+          }
         }
+      } catch (e) {
+        console.error('Error searching MongoDB snapshot for existing lead:', e.message);
+      }
+
+      if (mongoLeadFromSnapshot) {
+        console.log(`✅ Found existing lead ${mongoLeadFromSnapshot.id} in MongoDB snapshot!`);
+        existingLead = { table: 'mongodb', data: mongoLeadFromSnapshot };
+        finalLeadId = mongoLeadFromSnapshot.id;
+      }
+
+      // Check Supabase if not resolved or to update Supabase tables as well
+      if (!existingLead && finalLeadId) {
+        try {
+          let { data } = await sb.from('team_leads').select('*').eq('id', finalLeadId).single();
+          if (data) {
+            existingLead = { table: 'team_leads', data };
+          } else {
+            let { data: lData } = await sb.from('leads').select('*').eq('id', finalLeadId).single();
+            if (lData) existingLead = { table: 'leads', data: lData };
+          }
+        } catch (e) { }
       }
 
       if (!existingLead && phone) {
-        let { data } = await sb.from('team_leads').select('*').eq('phone', phone).single();
-        if (data) {
-          existingLead = { table: 'team_leads', data };
-          finalLeadId = data.id;
-        } else {
-          let { data: lData } = await sb.from('leads').select('*').eq('phone', phone).single();
-          if (lData) {
-            existingLead = { table: 'leads', data: lData };
-            finalLeadId = lData.id;
+        try {
+          const normPhone = normalizePhone(phone);
+          let { data } = await sb.from('team_leads').select('*').eq('phone', normPhone).single();
+          if (data) {
+            existingLead = { table: 'team_leads', data };
+            finalLeadId = data.id;
+          } else {
+            let { data: lData } = await sb.from('leads').select('*').eq('phone', normPhone).single();
+            if (lData) {
+              existingLead = { table: 'leads', data: lData };
+              finalLeadId = lData.id;
+            }
           }
-        }
+        } catch (e) { }
       }
 
       if (existingLead) {
@@ -3294,10 +3331,17 @@ Please check the market and contact them within 5 hours.
       try {
         const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
         if (snap && snap.data) {
+          let status = snap.data.pe_campaign_status || 'IDLE';
+          if (typeof status === 'string') {
+            status = status.replace(/"/g, '').trim();
+          }
+
           let queue = typeof snap.data.pe_campaign_queue === 'string'
             ? JSON.parse(snap.data.pe_campaign_queue)
             : (snap.data.pe_campaign_queue || []);
-          let status = snap.data.pe_campaign_status || 'IDLE';
+          if (typeof queue === 'string') {
+            try { queue = JSON.parse(queue); } catch (e) { }
+          }
 
           let stats = snap.data.pe_campaign_stats ? (typeof snap.data.pe_campaign_stats === 'string' ? JSON.parse(snap.data.pe_campaign_stats) : snap.data.pe_campaign_stats) : null;
           if (!stats) {
@@ -3315,6 +3359,8 @@ Please check the market and contact them within 5 hours.
             call_outcome: outcome,
             last_call_time: new Date().toISOString()
           });
+
+          console.log(`🤖 Campaign Processing Context — Status: ${status} | Lead ID: ${finalLeadId} | Attempts: ${currentLeadAttempts} | Unanswered: ${isUnanswered} | Queue Size: ${queue.length}`);
 
           if (status === 'RUNNING') {
             let proceedToNext = false;
@@ -3423,8 +3469,8 @@ Please check the market and contact them within 5 hours.
 
             if (proceedToNext) {
               if (queue.length > 0) {
-                const nextLeadId = queue.shift();
-                console.log(`🚀 Campaign moving to next lead in queue. ${queue.length} remaining.`);
+                const completedLeadId = queue.shift();
+                console.log(`🚀 Campaign moving to next lead in queue. Shifted completed lead ${completedLeadId}. ${queue.length} remaining.`);
 
                 snap.data.pe_campaign_queue = JSON.stringify(queue);
 
@@ -3436,20 +3482,44 @@ Please check the market and contact them within 5 hours.
                 snap.markModified('data');
                 await snap.save();
 
-                const { createClient } = require('@supabase/supabase-js');
-                const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-                let { data: nextLeadData } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
-                if (!nextLeadData) {
-                  let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
-                  nextLeadData = tLeadData;
-                }
+                if (queue.length > 0) {
+                  const nextLeadId = queue[0]; // Dial the NEXT lead in the queue!
+                  
+                  let nextLeadData = null;
+                  const { createClient } = require('@supabase/supabase-js');
+                  const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+                  
+                  try {
+                    let { data: nextLeadDataSb } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
+                    if (nextLeadDataSb) nextLeadData = nextLeadDataSb;
+                    else {
+                      let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
+                      if (tLeadData) nextLeadData = tLeadData;
+                    }
+                  } catch (e) { }
 
-                if (nextLeadData && nextLeadData.phone) {
-                  console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
-                  await new Promise(resolve => setTimeout(resolve, 1000));
-                  await triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
-                } else {
-                  console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
+                  if (!nextLeadData) {
+                    // Fallback: Check local MongoDB snapshot pe_leads list
+                    try {
+                      let leads = typeof snap.data.pe_leads === 'string'
+                        ? JSON.parse(snap.data.pe_leads)
+                        : snap.data.pe_leads;
+                      if (Array.isArray(leads)) {
+                        const mongoLead = leads.find(l => l.id == nextLeadId);
+                        if (mongoLead) {
+                          nextLeadData = mongoLead;
+                        }
+                      }
+                    } catch (e) { }
+                  }
+
+                  if (nextLeadData && nextLeadData.phone) {
+                    console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    await triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
+                  } else {
+                    console.log(`⚠️ Could not find lead ${nextLeadId} in Supabase or MongoDB to continue campaign.`);
+                  }
                 }
               } else {
                 snap.data.pe_campaign_status = 'COMPLETED';
