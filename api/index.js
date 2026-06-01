@@ -845,13 +845,29 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
   // Pre-parse date
   visit.visit_date = parseRelativeDate(visit.visit_date);
 
+  // Strict promise timeout helper (3 seconds default)
+  const withTimeout = (promise, ms = 3000, fallback = null) => {
+    return Promise.race([
+      promise,
+      new Promise((resolve, reject) => {
+        setTimeout(() => {
+          if (fallback !== null) {
+            resolve(fallback);
+          } else {
+            reject(new Error('Supabase request timed out'));
+          }
+        }, ms);
+      })
+    ]);
+  };
+
   // ── Parallelized Checks ──
   const checks = [];
   if (!is_ai_booking) {
-    if (visit.qualification_token) checks.push(getQualification(visit.qualification_token).then(r => ({ type: 'qual', res: r })));
-    if (visit.agreement_token) checks.push(getAgreement(visit.agreement_token).then(r => ({ type: 'agree', res: r })));
+    if (visit.qualification_token) checks.push(withTimeout(getQualification(visit.qualification_token), 3000, { success: false }).then(r => ({ type: 'qual', res: r })));
+    if (visit.agreement_token) checks.push(withTimeout(getAgreement(visit.agreement_token), 3000, { success: false }).then(r => ({ type: 'agree', res: r })));
   }
-  checks.push(getVisitsByDate(visit.visit_date).then(r => ({ type: 'avail', res: r })));
+  checks.push(withTimeout(getVisitsByDate(visit.visit_date), 3000, { success: false }).then(r => ({ type: 'avail', res: r })));
 
   const results = await Promise.all(checks);
 
@@ -887,23 +903,29 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
     const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 
     if (visit.lead_id) {
-      const { data } = await sb.from('visits')
-        .select('*')
-        .eq('lead_id', visit.lead_id)
-        .neq('status', 'cancelled')
-        .neq('status', 'rejected')
-        .order('created_at', { ascending: false });
+      const { data } = await withTimeout(
+        sb.from('visits')
+          .select('*')
+          .eq('lead_id', visit.lead_id)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected')
+          .order('created_at', { ascending: false }),
+        3000
+      );
       if (data && data.length > 0) {
         existingActiveVisit = data[0];
       }
     }
     if (!existingActiveVisit && visit.client_phone) {
-      const { data } = await sb.from('visits')
-        .select('*')
-        .eq('client_phone', visit.client_phone)
-        .neq('status', 'cancelled')
-        .neq('status', 'rejected')
-        .order('created_at', { ascending: false });
+      const { data } = await withTimeout(
+        sb.from('visits')
+          .select('*')
+          .eq('client_phone', visit.client_phone)
+          .neq('status', 'cancelled')
+          .neq('status', 'rejected')
+          .order('created_at', { ascending: false }),
+        3000
+      );
       if (data && data.length > 0) {
         existingActiveVisit = data[0];
       }
@@ -912,30 +934,36 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
     if (existingActiveVisit) {
       isReschedule = true;
       console.log(`🔄 Enforcing single-visit rule (Supabase): Found active visit ${existingActiveVisit.id}. Rescheduling to ${visit.visit_date} at ${visit.visit_time}.`);
-      const { data, error } = await sb.from('visits')
-        .update({
-          visit_date: visit.visit_date,
-          visit_time: visit.visit_time,
-          property_name: visit.property_name || existingActiveVisit.property_name,
-          notes: (existingActiveVisit.notes || '') + `\n[Rescheduled by Zorvo AI Agent on ${new Date().toLocaleDateString('en-US')}]`,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', existingActiveVisit.id)
-        .select()
-        .single();
+      const { data, error } = await withTimeout(
+        sb.from('visits')
+          .update({
+            visit_date: visit.visit_date,
+            visit_time: visit.visit_time,
+            property_name: visit.property_name || existingActiveVisit.property_name,
+            notes: (existingActiveVisit.notes || '') + `\n[Rescheduled by Zorvo AI Agent on ${new Date().toLocaleDateString('en-US')}]`,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingActiveVisit.id)
+          .select()
+          .single(),
+        3000
+      );
 
       if (error) throw error;
       supabaseSaved = true;
       savedVisit = data;
     } else {
       // ── Save to Supabase (New Booking)
-      const res = await saveVisitToSupabase({
-        ...visit,
-        agreement_id: visit.agreement_token || null,
-        qualification_id: visit.qualification_token || null,
-        status: 'confirmed',
-        created_at: new Date().toISOString()
-      });
+      const res = await withTimeout(
+        saveVisitToSupabase({
+          ...visit,
+          agreement_id: visit.agreement_token || null,
+          qualification_id: visit.qualification_token || null,
+          status: 'confirmed',
+          created_at: new Date().toISOString()
+        }),
+        3000
+      );
       if (!res.success) throw new Error(res.error);
       supabaseSaved = true;
       savedVisit = res.data;
