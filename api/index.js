@@ -2953,6 +2953,8 @@ Please check the market and contact them within 5 hours.
             notes: newLeadRecord.notes,
             created_at: new Date().toISOString()
           };
+          
+          finalLeadId = mongoLead.id;
 
           leads.unshift(mongoLead);
           snapshot.data.pe_leads = leads;
@@ -2974,19 +2976,38 @@ Please check the market and contact them within 5 hours.
       const messages = event?.message?.call?.messages || event?.message?.messages || [];
       let formattedTranscript = [];
       if (messages.length > 0) {
-        formattedTranscript = messages.map(m => ({
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: m.message || m.content || ''
-        }));
+        formattedTranscript = messages.map(m => {
+          const role = m.role === 'assistant' ? 'assistant' : 'user';
+          const speakerName = role === 'assistant' ? 'Aria' : (leadNameForCall || 'User');
+          const txt = m.message || m.content || '';
+          return {
+            role,
+            content: txt,
+            speaker: speakerName,
+            text: txt
+          };
+        });
       } else if (typeof transcript === 'string' && transcript.length > 0) {
         formattedTranscript = transcript.split('\n').map(line => {
           const parts = line.split(':');
           if (parts.length >= 2) {
             const role = parts[0].trim().toLowerCase().includes('assistant') ? 'assistant' : 'user';
-            const content = parts.slice(1).join(':').trim();
-            return { role, content };
+            const speakerName = role === 'assistant' ? 'Aria' : (leadNameForCall || 'User');
+            const txt = parts.slice(1).join(':').trim();
+            return {
+              role,
+              content: txt,
+              speaker: speakerName,
+              text: txt
+            };
           }
-          return { role: 'user', content: line.trim() };
+          const txt = line.trim();
+          return {
+            role: 'user',
+            content: txt,
+            speaker: leadNameForCall || 'User',
+            text: txt
+          };
         }).filter(t => t.content);
       }
 
@@ -2999,8 +3020,14 @@ Please check the market and contact them within 5 hours.
         callOutcome = 'Confirmed';
       }
 
+      // Enforce matching lead_id for new inbound leads
+      if (!finalLeadId) {
+        finalLeadId = 'lead_' + Date.now();
+      }
+
       await syncCallLogToSnapshot(AGENT_EMAIL, {
         id: call.id || ('call_' + Date.now()),
+        lead_id: finalLeadId,
         lead_name: leadNameForCall,
         urgency: urgencyScore,
         outcome: callOutcome,
