@@ -301,6 +301,66 @@ YOUR RULES:
             required: ['budget', 'location'],
           },
         },
+        {
+          name:        'update_lead_status',
+          description: 'Update the lead status mid-call. Call when you clearly know if the lead is interested, not interested, or wants a callback. Do NOT call for uncertain situations.',
+          parameters: {
+            type: 'object',
+            properties: {
+              status: {
+                type: 'string',
+                enum: ['interested', 'not_interested', 'callback_requested', 'busy'],
+                description: 'The lead\'s current status based on their response.'
+              },
+              callback_time: {
+                type: 'string',
+                description: 'If status is callback_requested: when they want to be called back. Example: "tomorrow at 3pm".'
+              },
+              reason: {
+                type: 'string',
+                description: 'Short human-readable reason. Example: "Lead said they are not looking anymore."'
+              }
+            },
+            required: ['status'],
+          },
+        },
+        {
+          name:        'create_follow_up',
+          description: 'Create a follow-up task for the agent. Use when a lead requests a manual callback or needs personal attention that you cannot handle.',
+          parameters: {
+            type: 'object',
+            properties: {
+              reason: {
+                type: 'string',
+                description: 'Why the follow-up is needed. Example: "Lead wants to discuss financing options with a senior agent."'
+              },
+              due_in_hours: {
+                type: 'number',
+                description: 'How many hours from now the follow-up should happen. Default 24.'
+              }
+            },
+            required: ['reason'],
+          },
+        },
+        {
+          name:        'save_call_summary',
+          description: 'Save a brief summary of the call before ending it. Call this at the end of every call that did not result in a booking or transfer.',
+          parameters: {
+            type: 'object',
+            properties: {
+              summary: {
+                type: 'string',
+                description: 'A 1-3 sentence summary of what was discussed and the lead\'s current situation.'
+              },
+              next_action: {
+                type: 'string',
+                enum: ['retry', 'follow_up', 'book_visit', 'transfer', 'stop'],
+                description: 'What should happen next for this lead.'
+              }
+            },
+            required: ['summary', 'next_action'],
+          },
+        },
       ],
     },
     voice: {

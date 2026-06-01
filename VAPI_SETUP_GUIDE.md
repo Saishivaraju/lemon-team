@@ -98,6 +98,55 @@ This allows Sarah to send the lead property details via SMS *during* the call.
 }
 ```
 
+### tool: update_lead_status *(NEW)*
+*   **Type:** Function (Custom Tool)
+*   **Description:** Update the lead status mid-call when you know if they are interested, not interested, or want a callback.
+*   **Server URL:** `https://scaleover-lemon.vercel.app/api/vapi/webhook`
+*   **Parameters (JSON Schema):**
+```json
+{
+  "type": "object",
+  "properties": {
+    "status": { "type": "string", "enum": ["interested", "not_interested", "callback_requested", "busy"] },
+    "callback_time": { "type": "string", "description": "When they want to be called back (if callback_requested)" },
+    "reason": { "type": "string", "description": "Short reason for this status" }
+  },
+  "required": ["status"]
+}
+```
+
+### tool: create_follow_up *(NEW)*
+*   **Type:** Function (Custom Tool)
+*   **Description:** Create a manual follow-up task for the agent when a lead needs personal attention.
+*   **Server URL:** `https://scaleover-lemon.vercel.app/api/vapi/webhook`
+*   **Parameters (JSON Schema):**
+```json
+{
+  "type": "object",
+  "properties": {
+    "reason": { "type": "string", "description": "Why the follow-up is needed" },
+    "due_in_hours": { "type": "number", "description": "Hours from now when follow-up is due. Default 24." }
+  },
+  "required": ["reason"]
+}
+```
+
+### tool: save_call_summary *(NEW)*
+*   **Type:** Function (Custom Tool)
+*   **Description:** Save a brief summary of the call before ending it. Call this before ending any call that did not result in a booking or transfer.
+*   **Server URL:** `https://scaleover-lemon.vercel.app/api/vapi/webhook`
+*   **Parameters (JSON Schema):**
+```json
+{
+  "type": "object",
+  "properties": {
+    "summary": { "type": "string", "description": "1-3 sentence summary of the call" },
+    "next_action": { "type": "string", "enum": ["retry", "follow_up", "book_visit", "transfer", "stop"] }
+  },
+  "required": ["summary", "next_action"]
+}
+```
+
 ## 3. Webhook URL (Critical for Retries)
 The webhook is how Vapi tells our system if a call was answered, missed, or if a visit was booked.
 
@@ -105,7 +154,37 @@ The webhook is how Vapi tells our system if a call was answered, missed, or if a
     `https://scaleover-lemon.vercel.app/api/vapi/webhook`
 2.  Ensure **all event messages** are enabled (specifically `call.status-update` and `end-of-call-report`).
 
-## 4. Smart Retry & Failover Logic
+### VAPI Dashboard Checklist
+- [ ] Server URL: `https://scaleover-lemon.vercel.app/api/vapi/webhook`
+- [ ] Events enabled: `call-started`, `status-update`, `function-call`, `tool-calls`, `end-of-call-report`, `hang`
+- [ ] Tools added: `bookVisit`, `transferCall`, `notifyAgentNoMatch`, `update_lead_status`, `create_follow_up`, `save_call_summary`, `sendSMS`
+- [ ] Recording enabled: **YES**
+- [ ] Silence timeout: **20s**
+- [ ] Max duration: **600s**
+
+## 4. Call Outcome Reference Table
+
+Every call ends with a `endedReason` from VAPI. Here is how the system handles each:
+
+| VAPI `endedReason` | Outcome Status | Retry? | Delay | Action |
+|---|---|---|---|---|
+| `customer-did-not-answer` | `no_answer` | ✅ Yes | 5 min | "Sorry we missed you" email |
+| `customer-did-not-pick-up` | `no_answer` | ✅ Yes | 5 min | "Sorry we missed you" email |
+| `customer-busy` | `busy` | ✅ Yes | 5 min | "Sorry we missed you" email |
+| `voicemail` | `voicemail` | ✅ Yes | 30 min | "We left you a voicemail" email |
+| `network-error` | `call_failed` | ✅ Yes | 5 min | Agent notification |
+| `phone-number-not-found` | `call_failed` | ❌ No | — | Agent notification only |
+| `customer-ended-call` (< 20s) | `hung_up` | ❌ No | — | Drip email sequence |
+| `assistant-ended-call` + booked | `booked` | ❌ No | — | Booking confirmation email |
+| `assistant-ended-call` + not interested | `not_interested` | ❌ No | — | All retries cancelled |
+| `assistant-ended-call` + callback | `callback_requested` | ❌ No | — | Task created + agent notified |
+| `assistant-ended-call` + transfer | `transferred` | ❌ No | — | Agent notified immediately |
+| `assistant-ended-call` (general) | `interested` | ❌ No | — | Drip email sequence |
+
+> [!IMPORTANT]
+> The **Campaign Queue** and **Retry Queue** are completely separate. When a lead doesn't answer during a campaign, the system schedules a retry in a separate queue and **immediately advances to the next lead**. The campaign never waits.
+
+## 5. Smart Retry & Failover Logic
 Our system is configured to handle missed calls automatically with a three-stage escalation:
 
 1.  **Stage 1 (Retry 1)**: If the first call is missed, the system waits **5 minutes** and retries.
@@ -118,20 +197,20 @@ Our system is configured to handle missed calls automatically with a three-stage
 > [!NOTE]
 > This logic is managed entirely by the backend `services/retry.js` and does not require additional configuration in Vapi other than ensuring the Webhook URL is correct.
 
-## 5. Inbound Calls
+## 6. Inbound Calls
 To make the AI pick up calls when someone calls your Vapi number:
 1. Go to **Phone Numbers** in the Vapi Dashboard.
 2. Select your phone number.
 3. Set the **Server URL** for the phone number to the same webhook: `https://scaleover-lemon.vercel.app/api/vapi/webhook`.
 4. Now, when a call comes in, the system will provide the assistant config dynamically, and Sarah will answer automatically.
 
-## 6. Date Awareness & Booking Reliability
+## 7. Date Awareness & Booking Reliability
 The system is now configured with **Date Awareness**. This means the AI knows the current date and can convert relative phrases like "next Tuesday" into the `YYYY-MM-DD` format required for bookings.
 
 - **Automated**: The backend code automatically injects the current date into the system prompt.
 - **Manual Testing**: If you are testing the assistant directly in the Vapi Dashboard, you should manually add a line like `CURRENT DATE: Friday, May 15, 2026` to the system prompt to help the AI calculate dates correctly during tests.
 
-## 7. Unified Notifications
+## 8. Unified Notifications
 Every successful booking via Vapi now triggers a unified notification sequence:
 - **Agent Dashboard Alert**: A notification appears under the bell icon in your dashboard.
 - **Agent Email**: A detailed email is sent to your registered address.
@@ -140,10 +219,15 @@ Every successful booking via Vapi now triggers a unified notification sequence:
 > [!TIP]
 > Ensure your `AGENT_EMAIL` in the `.env` file is correct, as this is where all booking alerts will be sent.
 
-## 8. AI Data Normalization & Transfers
-With the latest update, there are **NO changes required to your System Prompt** to fix spoken dates, times, emails, or phone numbers. 
+## 9. AI Data Normalization & Transfers
+With the latest update, there are **NO changes required to your System Prompt** to fix spoken dates, times, emails, or phone numbers.
 
 Here is what you need to ensure in the Vapi Dashboard:
 1. **Server URL**: Double-check that your Assistant's Server URL is set to `https://scaleover-lemon.vercel.app/api/vapi/webhook`. This webhook automatically catches any spoken words (like "nine eight seven" or "john dot smith") and converts them into proper digits and formats before saving them to your dashboard.
 2. **Transfer Calls**: The `transferCall` function works automatically through the webhook. Do not hardcode a phone number inside the Vapi dashboard. Instead, ensure you have set the `TRANSFER_NUMBER` or `AGENT_PHONE` in your server's `.env` file (e.g. `TRANSFER_NUMBER=+1234567890`). The webhook will normalize this number and securely pass it to Vapi during the call.
 
+The webhook is how Vapi tells our system if a call was answered, missed, or if a visit was booked.
+
+1.  Set your **Server URL** in the Assistant's "Advanced" section to:
+    `https://scaleover-lemon.vercel.app/api/vapi/webhook`
+2.  Ensure **all event messages** are enabled (specifically `call.status-update` and `end-of-call-report`).

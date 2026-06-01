@@ -32,13 +32,17 @@ const { makeOutboundCall, makeReminderCall, makeConfirmationCall, buildAssistant
 
 // ── Team + Retry Services
 const { assignLeadToAgent, saveTeamLead, updateLeadStage, saveCallLog, getTeamReport } = require('../services/team');
-const { scheduleRetry, cancelRetry, getRetryStatus } = require('../services/retry');
+const { scheduleRetry, scheduleRetryForCampaign, cancelRetry, cancelDripRetry, getRetryStatus } = require('../services/retry');
+
+// ── Call Outcome Classifier
+const { OUTCOMES, classifyOutcome, getRetryPolicy, buildCallResult, formatDuration, scoreToBucket } = require('../services/callOutcome');
 
 // ── Follow-Up Scheduler
 const { scheduleFollowUps, cancelFollowUps, getFollowUpStatus, getAllScheduled, wrapEmail, buildPropertyCards, ctaButton, BASE_URL } = require('../services/followup');
 
 // ── Normalization Utilities
 const { normalizeEmail, normalizePhone, normalizeDate, normalizeTime } = require('../services/normalization');
+
 
 async function triggerAICall(lead) {
   try {
@@ -2456,6 +2460,116 @@ if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
 
 
 // =============================================================================
+// CAMPAIGN QUEUE HELPER — Always advances, never blocks, never skips
+// =============================================================================
+/**
+ * Advance the sequential campaign queue to the next lead.
+ * Must be called at the end of EVERY end-of-call-report, regardless of outcome.
+ *
+ * @param {object} snap         - MongoDB DataSnapshot document
+ * @param {string} currentLeadId - ID of the lead whose call just ended
+ * @param {string} status       - Normalized outcome status from OUTCOMES
+ * @param {object} stats        - Campaign stats object (mutated in place)
+ */
+async function advanceCampaignQueue(snap, currentLeadId, status, stats) {
+  if (!snap || !snap.data) return;
+
+  let campaignStatus = snap.data.pe_campaign_status || 'IDLE';
+  if (typeof campaignStatus === 'string') campaignStatus = campaignStatus.replace(/"/g, '').trim();
+
+  if (campaignStatus !== 'RUNNING') {
+    console.log(`[CAMPAIGN] Status is ${campaignStatus} — not advancing queue.`);
+    return;
+  }
+
+  let queue = snap.data.pe_campaign_queue;
+  if (typeof queue === 'string') { try { queue = JSON.parse(queue); } catch (e) { queue = []; } }
+  if (!Array.isArray(queue)) queue = [];
+
+  console.log(`[CAMPAIGN] Advancing queue — current lead: ${currentLeadId} | status: ${status} | ${queue.length} leads remain`);
+
+  // Remove the lead we just processed (it should be at the front)
+  if (queue.length > 0 && (queue[0] === currentLeadId || queue[0] == currentLeadId)) {
+    queue.shift();
+    console.log(`[CAMPAIGN] ✅ Shifted lead ${currentLeadId} from queue. ${queue.length} remaining.`);
+  } else {
+    // Lead wasn't at front (e.g. retry triggered this, or ID mismatch) — try to remove it by value
+    const idx = queue.indexOf(currentLeadId);
+    if (idx !== -1) {
+      queue.splice(idx, 1);
+      console.log(`[CAMPAIGN] ✅ Removed lead ${currentLeadId} from queue (position ${idx}). ${queue.length} remaining.`);
+    } else {
+      console.log(`[CAMPAIGN] ⚠️ Lead ${currentLeadId} not found in queue front. Queue not modified.`);
+    }
+  }
+
+  snap.data.pe_campaign_queue = JSON.stringify(queue);
+  snap.data.pe_campaign_stats = JSON.stringify(stats);
+
+  if (queue.length === 0) {
+    snap.data.pe_campaign_status = 'COMPLETED';
+    snap.markModified('data');
+    await snap.save();
+    console.log('[CAMPAIGN] 🏁 Campaign COMPLETED — all leads processed.');
+    return;
+  }
+
+  // Save queue state first, then trigger the next call
+  snap.markModified('data');
+  await snap.save();
+
+  const nextLeadId = queue[0];
+  console.log(`[CAMPAIGN] 🔍 Looking up next lead: ${nextLeadId}`);
+
+  let nextLeadData = null;
+
+  // 1. Try Supabase leads
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    const { data } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
+    if (data) nextLeadData = data;
+  } catch (e) { /* silent */ }
+
+  // 2. Try Supabase team_leads
+  if (!nextLeadData) {
+    try {
+      const { createClient } = require('@supabase/supabase-js');
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+      const { data } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
+      if (data) nextLeadData = data;
+    } catch (e) { /* silent */ }
+  }
+
+  // 3. Fallback: MongoDB snapshot pe_leads
+  if (!nextLeadData) {
+    try {
+      let leads = snap.data.pe_leads;
+      if (typeof leads === 'string') { try { leads = JSON.parse(leads); } catch (e) { leads = []; } }
+      if (Array.isArray(leads)) {
+        nextLeadData = leads.find(l => String(l.id) === String(nextLeadId)) || null;
+      }
+    } catch (e) { /* silent */ }
+  }
+
+  if (nextLeadData && nextLeadData.phone) {
+    console.log(`[CAMPAIGN] 📞 Triggering call for next lead: ${nextLeadData.name} (${nextLeadData.phone})`);
+    // Small 1s delay so VAPI webhook response is fully flushed before the next call starts
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    triggerAICall(nextLeadData).catch(err => console.error('[CAMPAIGN] ❌ Next lead call trigger failed:', err.message));
+  } else {
+    console.log(`[CAMPAIGN] ⚠️ Could not find next lead ${nextLeadId} — skipping to next.`);
+    // Recursively try to advance past this missing lead
+    snap.data.pe_campaign_queue = JSON.stringify(queue.slice(1));
+    snap.markModified('data');
+    await snap.save();
+    if (queue.length > 1) {
+      await advanceCampaignQueue(snap, queue[0], 'skipped', stats);
+    }
+  }
+}
+
+// =============================================================================
 // VAPI WEBHOOK — Receives all call events from VAPI
 // Set this URL in your VAPI dashboard: /api/vapi/webhook
 // =============================================================================
@@ -2781,6 +2895,102 @@ Please check the market and contact them within 5 hours.
         });
       }
 
+      // ── update_lead_status — AI explicitly marks lead interest mid-call ────
+      if (fnName === 'update_lead_status') {
+        const { status: leadStatus, callback_time, reason: statusReason } = fnArgs;
+        console.log(`[TOOL] update_lead_status → ${leadStatus} | reason: ${statusReason || 'N/A'} | callback: ${callback_time || 'N/A'}`);
+
+        try {
+          // Update Supabase lead status
+          if (leadId) await robustUpdateLeadStage(leadId, leadStatus);
+
+          // For callback_requested: create a task
+          if (leadStatus === 'callback_requested' && callback_time) {
+            const { createClient } = require('@supabase/supabase-js');
+            const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+            const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+            await sb.from('tasks').insert({
+              title: `Callback Requested: ${call.customer?.name || phone}`,
+              description: `Lead asked to be called back at: ${callback_time}. Reason: ${statusReason || 'No reason given'}`,
+              due_date: dueDate,
+              priority: 'high',
+              status: 'pending',
+            }).catch(e => console.error('[TOOL] Task insert error:', e.message));
+
+            await notifyAgent(AGENT_EMAIL, {
+              title: `📅 Callback Requested: ${call.customer?.name || phone}`,
+              description: `Lead wants a callback at: ${callback_time}`,
+              type: 'lead', icon: '📅',
+            });
+          }
+
+          // Sync to snapshot
+          if (leadId) {
+            await syncLeadToSnapshot(AGENT_EMAIL, leadId, {
+              status: leadStatus,
+              pipeline_stage: leadStatus,
+              callback_time: callback_time || null,
+            });
+          }
+        } catch (e) { console.error('[TOOL] update_lead_status error:', e.message); }
+
+        return res.json({
+          results: [{ toolCallId: toolCallId, result: `Lead status updated to ${leadStatus}. ${statusReason ? 'Reason: ' + statusReason : ''}` }],
+          success: true,
+        });
+      }
+
+      // ── create_follow_up — AI creates a manual follow-up task ────────────
+      if (fnName === 'create_follow_up') {
+        const { reason: followUpReason, due_in_hours = 24 } = fnArgs;
+        console.log(`[TOOL] create_follow_up → reason: ${followUpReason} | due in ${due_in_hours}h`);
+
+        try {
+          const dueDate = new Date(Date.now() + due_in_hours * 60 * 60 * 1000).toISOString();
+          const { createClient } = require('@supabase/supabase-js');
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+          await sb.from('tasks').insert({
+            title: `AI Follow-Up: ${call.customer?.name || phone}`,
+            description: followUpReason,
+            due_date: dueDate,
+            priority: 'medium',
+            status: 'pending',
+          }).catch(e => console.error('[TOOL] Follow-up task insert error:', e.message));
+
+          await notifyAgent(AGENT_EMAIL, {
+            title: `📋 Follow-Up Task Created: ${call.customer?.name || phone}`,
+            description: followUpReason,
+            type: 'info', icon: '📋',
+          });
+        } catch (e) { console.error('[TOOL] create_follow_up error:', e.message); }
+
+        return res.json({
+          results: [{ toolCallId: toolCallId, result: `Follow-up task created. Reason: ${followUpReason}` }],
+          success: true,
+        });
+      }
+
+      // ── save_call_summary — AI saves summary before ending call ──────────
+      if (fnName === 'save_call_summary') {
+        const { summary: callSummary, next_action } = fnArgs;
+        console.log(`[TOOL] save_call_summary → next_action: ${next_action} | summary: ${callSummary?.substring(0, 80)}`);
+
+        try {
+          // Save to snapshot as a note — full sync happens in end-of-call-report
+          if (leadId) {
+            await syncLeadToSnapshot(AGENT_EMAIL, leadId, {
+              ai_call_summary: callSummary,
+              next_action,
+            });
+          }
+        } catch (e) { console.error('[TOOL] save_call_summary error:', e.message); }
+
+        return res.json({
+          results: [{ toolCallId: toolCallId, result: `Call summary saved. Next action: ${next_action}.` }],
+          success: true,
+        });
+      }
+
       // Fallback response for unhandled tools to prevent silent failure or timeout
       return res.json({
         results: [{
@@ -2791,6 +3001,7 @@ Please check the market and contact them within 5 hours.
         reason: `Unknown or unhandled tool call: ${fnName}`
       });
     }
+
 
     // ── end-of-call-report — call ended, save everything ────────────────────
     else if (type === 'end-of-call-report') {
@@ -2810,9 +3021,8 @@ Please check the market and contact them within 5 hours.
       const recording = report.recordingUrl || null;
       const endedReason = report.endedReason || 'unknown';
       const duration = report.durationSeconds || 0;
-      const isFailed = ['customer-busy', 'customer-did-not-answer', 'voicemail', 'customer-did-not-pick-up', 'phone-number-not-found', 'network-error'].includes(endedReason);
 
-      console.log(`📋 VAPI call ended. Duration: ${duration}s | Reason: ${endedReason}`);
+      console.log(`[CALL] ✅ Call completed — Duration: ${duration}s | endedReason: ${endedReason} | phone: ${phone}`);
 
       // 1. Save call log to database
       await saveCallLog({
@@ -2834,6 +3044,20 @@ Please check the market and contact them within 5 hours.
       const { analyzeTranscript } = require('../services/intelligence.js');
       const aiIntelligence = await analyzeTranscript(transcript);
 
+      // ── CLASSIFY OUTCOME (single source of truth) ──────────────────────────
+      // Track if specific tools were called during the call
+      const _toolsUsed = event?.message?.call?.toolCalls || event?.message?.toolCalls || [];
+      const bookingCreated = _toolsUsed.some(tc => tc?.function?.name === 'bookVisit' && tc?.result);
+      const transferDone   = _toolsUsed.some(tc => tc?.function?.name === 'transferCall');
+      const callbackSet    = _toolsUsed.some(tc => tc?.function?.name === 'update_lead_status' &&
+        (tc?.function?.arguments?.status === 'callback_requested' || (typeof tc?.function?.arguments === 'string' && tc.function.arguments.includes('callback_requested'))));
+
+      const callStatus = classifyOutcome(endedReason, duration, aiIntelligence, bookingCreated, transferDone, callbackSet);
+      const retryPolicy = getRetryPolicy(callStatus, endedReason);
+      const isFailed = [OUTCOMES.NO_ANSWER, OUTCOMES.BUSY, OUTCOMES.VOICEMAIL, OUTCOMES.CALL_FAILED, OUTCOMES.HUNG_UP].includes(callStatus);
+
+      console.log(`[OUTCOME] Classified as: ${callStatus} | retry: ${retryPolicy.shouldRetry} | retryDelay: ${retryPolicy.retryDelayMinutes}min`);
+
       const extractedLead = {
         name: call.customer?.name || metadata.name || null,
         phone: normalizePhone(phone || call.customer?.number || aiIntelligence.extracted_phone || metadata.phone || null),
@@ -2843,10 +3067,8 @@ Please check the market and contact them within 5 hours.
         pre_approval_status: structuredData.pre_approval_status || structuredData.preApprovalStatus || structuredData.preApproval || null,
         property_interest: structuredData.property_interest || structuredData.propertyInterest || metadata.interest || null,
         notes: aiIntelligence.call_summary || analysis.summary || transcript.substring(0, 500) || null,
-        status: 'Contacted',
+        status: callStatus,
         qualification_score: aiIntelligence.closing_probability || parseInt(structuredData.qualification_score || structuredData.score || (structuredData.pre_approval_status === 'yes' ? 90 : 70)) || 70,
-
-        // NEW INTELLIGENCE FIELDS
         lead_score: aiIntelligence.lead_score || 'WARM',
         priority: aiIntelligence.priority || 'FOLLOW UP',
         intent: aiIntelligence.intent || 'Unknown',
@@ -3115,64 +3337,72 @@ Please check the market and contact them within 5 hours.
         lead_id: finalLeadId,
         lead_name: leadNameForCall,
         urgency: urgencyScore,
-        outcome: callOutcome,
+        outcome: callStatus,
         duration: durationStr,
         transcript: formattedTranscript,
+        call_status: callStatus,
+        ended_reason: endedReason,
         created_at: new Date().toISOString()
       });
 
-      // 5. Send Bell Notification to Dashboard
+      // 5. Build and save structured CallResult JSON
+      const callResult = buildCallResult({
+        leadId: finalLeadId,
+        callId: call.id || callId,
+        status: callStatus,
+        endedReason,
+        transcript,
+        aiIntelligence,
+        duration,
+        retryScheduled: retryPolicy.shouldRetry,
+        retryTimeMinutes: retryPolicy.retryDelayMinutes,
+        bookingCreated,
+        transferRequired: callStatus === OUTCOMES.TRANSFERRED,
+        followUpRequired: [OUTCOMES.INTERESTED, OUTCOMES.HUNG_UP, OUTCOMES.CALLBACK_REQUESTED].includes(callStatus),
+      });
+      console.log('[CALL_RESULT]', JSON.stringify(callResult));
+
+      // 6. Send Bell Notification to Dashboard
       await notifyAgent(AGENT_EMAIL, {
         title: `📞 Call Ended: ${leadNameForCall}`,
-        description: `Duration: ${durationStr} · Status: ${callOutcome} · Score: ${urgencyScore}/10`,
+        description: `Duration: ${durationStr} · Outcome: ${callStatus} · Score: ${urgencyScore}/10`,
         type: 'info',
         icon: 'fas fa-phone-alt'
       });
 
-      if ((isFailed || duration < 10) && phone) {
-        console.log(`⚠️  Detected call failure/no-answer for ${phone} (Reason: ${endedReason}). Scheduling retries.`);
-        const leadMeta = {
-          phone,
-          name: call.customer?.name,
-          id: leadId,
-          email: metadata.email,
-          property_interest: metadata.interest || '',
-          budget: metadata.budget || ''
-        };
-        await scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
-      }
+      // 7. Per-outcome actions
+      const leadEmail = extractedLead.email || metadata.email || await getLeadEmail(leadId, phone);
+      const leadMeta = {
+        phone, id: finalLeadId,
+        name: call.customer?.name || metadata.name || 'Lead',
+        email: leadEmail || metadata.email || '',
+        property_interest: metadata.interest || '',
+        budget: metadata.budget || ''
+      };
 
-      // ── Schedule email follow-ups or send Booking Confirmation after call ends
-      if (phone) {
-        const leadEmail = extractedLead.email || metadata.email || await getLeadEmail(leadId, phone);
-        const isUnanswered = isFailed || duration < 10;
-        const outcome = isUnanswered ? 'NO ANSWER' : (aiIntelligence.outcome || 'FOLLOW UP');
+      // Look up active visit for booking confirmation
+      let activeVisit = null;
+      try {
+        const { createClient } = require('@supabase/supabase-js');
+        const sbV = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+        const qPhone = normalizePhone(phone || '');
+        const { data: vData } = await sbV.from('visits')
+          .select('*').neq('status','cancelled').neq('status','rejected')
+          .or(`client_phone.eq.${qPhone}${finalLeadId ? `,lead_id.eq.${finalLeadId}` : ''}`)
+          .order('created_at', { ascending: false }).limit(1);
+        if (vData && vData.length > 0) activeVisit = vData[0];
+      } catch (e) { console.error('[OUTCOME] Visit lookup error:', e.message); }
 
-        // Lookup if they have an active confirmed visit in database
-        let activeVisit = null;
-        try {
-          const { createClient } = require('@supabase/supabase-js');
-          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-          
-          let queryPhone = phone || call.customer?.number || '';
-          queryPhone = normalizePhone(queryPhone);
-          
-          const { data: vData } = await sb.from('visits')
-            .select('*')
-            .neq('status', 'cancelled')
-            .neq('status', 'rejected')
-            .or(`client_phone.eq.${queryPhone}${leadId ? `,lead_id.eq.${leadId}` : ''}`)
-            .order('created_at', { ascending: false })
-            .limit(1);
-            
-          if (vData && vData.length > 0) {
-            activeVisit = vData[0];
-          }
-        } catch (e) {
-          console.error('Error looking up active visit in end-of-call followups:', e.message);
+      let followupProperties = [];
+      try {
+        const snapProp = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        if (snapProp?.data?.pe_properties) {
+          followupProperties = typeof snapProp.data.pe_properties === 'string'
+            ? JSON.parse(snapProp.data.pe_properties) : snapProp.data.pe_properties;
         }
+      } catch (e) { /* silent */ }
 
-        const isLeadBooked = outcome === 'BOOKED' || !!activeVisit;
+      const isLeadBooked = callStatus === OUTCOMES.BOOKED || !!activeVisit;
 
         if (isLeadBooked && leadEmail) {
           console.log(`🏡 Lead accepted to visit. Sending confirmed booking email for ${activeVisit?.property_name || 'Property'} to ${leadEmail}`);
@@ -3327,222 +3557,173 @@ Please check the market and contact them within 5 hours.
         }
       }
 
-      // ── Process Sequential Campaign Queue ──────────────────────────────────────
+
+      // 8. Per-outcome switch — handle each outcome specifically
+      switch (callStatus) {
+
+        case OUTCOMES.NO_ANSWER:
+        case OUTCOMES.BUSY:
+          console.log(`[OUTCOME] ${callStatus} — scheduling retry for ${phone} in ${retryPolicy.retryDelayMinutes}min`);
+          await robustUpdateLeadStage(finalLeadId, callStatus);
+          if (phone) {
+            // Send 'sorry we missed you' email non-blocking
+            if (leadEmail) {
+              sendEmail({
+                to: leadEmail,
+                subject: `👋 Sorry we missed you, ${leadMeta.name}! — ${process.env.COMPANY_NAME || 'Zorvo Realty'}`,
+                message: `Hi ${leadMeta.name},\n\nWe tried calling you regarding your property search. We'll try again shortly!\n\nBrowse properties: ${process.env.BASE_URL || ''}`,
+                html: wrapEmail('Sorry We Missed You!', 'We will try calling you back shortly',
+                  `<div style="background:rgba(197,160,89,0.07);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:20px">
+                    <p style="margin:0 0 8px;font-size:18px;font-weight:600;color:#faf8f4">Hi ${leadMeta.name}! 👋</p>
+                    <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.8">
+                      We just tried calling you about your property search — no worries!<br><br>
+                      <strong>We'll try calling you again in ${retryPolicy.retryDelayMinutes} minutes.</strong><br><br>
+                      Feel free to browse our listings below while you wait.
+                    </p>
+                  </div>
+                  ${buildPropertyCards(followupProperties)}
+                  ${ctaButton('Browse All Properties →')}`
+                )
+              }).catch(e => console.error('[OUTCOME] Missed call email failed:', e.message));
+            }
+            // Schedule retry in SEPARATE retry queue (NOT the campaign queue)
+            await scheduleRetryForCampaign(leadMeta, triggerAICall, triggerFailoverMessages);
+            console.log(`[RETRY] ✅ Retry scheduled for ${phone} — campaign continues immediately`);
+          }
+          break;
+
+        case OUTCOMES.VOICEMAIL:
+          console.log(`[OUTCOME] voicemail — scheduling 30min retry for ${phone}`);
+          await robustUpdateLeadStage(finalLeadId, 'voicemail');
+          if (phone) {
+            if (leadEmail) {
+              sendEmail({
+                to: leadEmail,
+                subject: `📱 We left you a voicemail, ${leadMeta.name} — ${process.env.COMPANY_NAME || 'Zorvo Realty'}`,
+                message: `Hi ${leadMeta.name},\n\nWe called and left you a voicemail about your property inquiry. Call us back or browse our listings!\n\n${process.env.BASE_URL || ''}`,
+                html: wrapEmail('We Left You a Voicemail', 'Browse our properties while you listen', buildPropertyCards(followupProperties) + ctaButton('Browse All Properties →'))
+              }).catch(e => console.error('[OUTCOME] Voicemail email failed:', e.message));
+            }
+            await scheduleRetryForCampaign(leadMeta, triggerAICall, triggerFailoverMessages, null, 30 * 60 * 1000);
+          }
+          break;
+
+        case OUTCOMES.HUNG_UP:
+          console.log(`[OUTCOME] hung_up — sending follow-up email to ${phone}`);
+          await robustUpdateLeadStage(finalLeadId, 'hung_up');
+          if (leadEmail) {
+            scheduleFollowUps(leadMeta, followupProperties).catch(e => console.error('[OUTCOME] Follow-up schedule error:', e.message));
+          }
+          break;
+
+        case OUTCOMES.CALL_FAILED:
+          console.log(`[OUTCOME] call_failed (${endedReason}) — notifying agent`);
+          await robustUpdateLeadStage(finalLeadId, 'call_failed');
+          await notifyAgent(AGENT_EMAIL, {
+            title: `⚠️ Call Failed: ${leadMeta.name || phone}`,
+            description: `Reason: ${endedReason}\nPhone: ${phone}`,
+            type: 'warning', icon: '⚠️',
+            emailSubject: `⚠️ VAPI Call Failed: ${leadMeta.name || phone}`
+          });
+          // Only retry if the number is valid (not not-found/error)
+          if (retryPolicy.shouldRetry && phone) {
+            await scheduleRetryForCampaign(leadMeta, triggerAICall, triggerFailoverMessages);
+          }
+          break;
+
+        case OUTCOMES.NOT_INTERESTED:
+          console.log(`[OUTCOME] not_interested — stopping all retries for ${phone}`);
+          await robustUpdateLeadStage(finalLeadId, 'not_interested');
+          if (phone) { await cancelRetry(phone); await cancelFollowUps(phone); }
+          break;
+
+        case OUTCOMES.CALLBACK_REQUESTED: {
+          console.log(`[OUTCOME] callback_requested — creating task for ${phone}`);
+          await robustUpdateLeadStage(finalLeadId, 'callback_requested');
+          const cbDue = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          try {
+            const { createClient: cbClient } = require('@supabase/supabase-js');
+            const sbCb = cbClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+            await sbCb.from('tasks').insert({
+              title: `Callback: ${leadMeta.name || phone}`,
+              description: `Lead requested a callback. Source: AI call.`,
+              due_date: cbDue, priority: 'high', status: 'pending'
+            });
+          } catch (e) { console.error('[OUTCOME] Callback task error:', e.message); }
+          await notifyAgent(AGENT_EMAIL, {
+            title: `📅 Callback Requested: ${leadMeta.name || phone}`,
+            description: `Lead asked to be called back. Phone: ${phone}`,
+            type: 'lead', icon: '📅'
+          });
+          break;
+        }
+
+        case OUTCOMES.BOOKED:
+          console.log(`[OUTCOME] booked — sending confirmation email to ${leadEmail}`);
+          await robustUpdateLeadStage(finalLeadId, 'booked');
+          if (phone) { await cancelRetry(phone); await cancelFollowUps(phone); }
+          // Booking confirmation email is handled below (isLeadBooked block)
+          break;
+
+        case OUTCOMES.TRANSFERRED:
+          console.log(`[OUTCOME] transferred — notifying agent`);
+          await robustUpdateLeadStage(finalLeadId, 'transferred');
+          await notifyAgent(AGENT_EMAIL, {
+            title: `🔀 Transfer Requested: ${leadMeta.name || phone}`,
+            description: `Lead requested transfer to agent. Phone: ${phone}`,
+            type: 'lead', icon: '🔀',
+            emailSubject: `🔀 Transfer Requested: ${leadMeta.name || phone}`
+          });
+          break;
+
+        case OUTCOMES.INTERESTED:
+        default:
+          console.log(`[OUTCOME] interested — scheduling drip follow-ups for ${phone}`);
+          await robustUpdateLeadStage(finalLeadId, 'interested');
+          if (leadEmail) {
+            scheduleFollowUps(leadMeta, followupProperties).catch(e => console.error('[OUTCOME] Follow-up error:', e.message));
+          }
+          break;
+      }
+
+      // (Booking confirmation email was sent in the BOOKED outcome case above)
+      // Campaign queue is advanced by advanceCampaignQueue() below.
+
+
+      // 9. Advance campaign queue — ALWAYS runs, wrapped in try/finally
       try {
-        const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
-        if (snap && snap.data) {
-          let status = snap.data.pe_campaign_status || 'IDLE';
-          if (typeof status === 'string') {
-            status = status.replace(/"/g, '').trim();
-          }
+        const snapForCampaign = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        if (snapForCampaign && snapForCampaign.data) {
+          let campaignStats = snapForCampaign.data.pe_campaign_stats
+            ? (typeof snapForCampaign.data.pe_campaign_stats === 'string'
+                ? JSON.parse(snapForCampaign.data.pe_campaign_stats)
+                : snapForCampaign.data.pe_campaign_stats)
+            : { totalLeads: 0, callsCompleted: 0, bookings: 0, followUps: 0, noAnswers: 0, notInterested: 0 };
 
-          let queue = typeof snap.data.pe_campaign_queue === 'string'
-            ? JSON.parse(snap.data.pe_campaign_queue)
-            : (snap.data.pe_campaign_queue || []);
-          if (typeof queue === 'string') {
-            try { queue = JSON.parse(queue); } catch (e) { }
-          }
+          // Update stats based on outcome
+          campaignStats.callsCompleted = (campaignStats.callsCompleted || 0) + 1;
+          if (callStatus === OUTCOMES.BOOKED)          campaignStats.bookings      = (campaignStats.bookings || 0) + 1;
+          if (callStatus === OUTCOMES.NOT_INTERESTED)  campaignStats.notInterested = (campaignStats.notInterested || 0) + 1;
+          if (callStatus === OUTCOMES.NO_ANSWER || callStatus === OUTCOMES.BUSY) campaignStats.noAnswers = (campaignStats.noAnswers || 0) + 1;
+          if (callStatus === OUTCOMES.INTERESTED)      campaignStats.followUps     = (campaignStats.followUps || 0) + 1;
 
-          let stats = snap.data.pe_campaign_stats ? (typeof snap.data.pe_campaign_stats === 'string' ? JSON.parse(snap.data.pe_campaign_stats) : snap.data.pe_campaign_stats) : null;
-          if (!stats) {
-            stats = { totalLeads: queue.length + 1, callsCompleted: 0, bookings: 0, followUps: 0, noAnswers: 0, notInterested: 0 };
-          }
-
-          let attempts = snap.data.pe_campaign_attempts ? (typeof snap.data.pe_campaign_attempts === 'string' ? JSON.parse(snap.data.pe_campaign_attempts) : snap.data.pe_campaign_attempts) : {};
-          const currentLeadAttempts = attempts[finalLeadId] || 0;
-
-          const isUnanswered = isFailed || duration < 10;
-          const outcome = isUnanswered ? 'NO ANSWER' : (aiIntelligence.outcome || 'FOLLOW UP');
-
-          // Log outcome on the current lead in snapshot too!
+          // Sync outcome to lead snapshot
           await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, {
-            call_outcome: outcome,
+            call_outcome: callStatus,
             last_call_time: new Date().toISOString()
           });
 
-          console.log(`🤖 Campaign Processing Context — Status: ${status} | Lead ID: ${finalLeadId} | Attempts: ${currentLeadAttempts} | Unanswered: ${isUnanswered} | Queue Size: ${queue.length}`);
-
-          if (status === 'RUNNING') {
-            let proceedToNext = false;
-
-            if (isUnanswered) {
-              if (currentLeadAttempts === 0) {
-                // First call: No Answer -> Wait 5 Minutes -> Retry in background
-                attempts[finalLeadId] = 1;
-                snap.data.pe_campaign_attempts = JSON.stringify(attempts);
-
-                console.log(`⏳ Lead ${phone} did not answer. Scheduling 5-minute background retry and progressing to next campaign lead.`);
-
-                const leadToRetry = {
-                  id: finalLeadId,
-                  phone,
-                  name: call.customer?.name || metadata.name || 'there',
-                  email: metadata.email || '',
-                  property_interest: metadata.interest || '',
-                  budget: metadata.budget || ''
-                };
-
-                // Instant Follow-up "sorry we missed you" email
-                if (leadToRetry.email) {
-                  let properties = [];
-                  if (snap?.data?.pe_properties) {
-                    properties = typeof snap.data.pe_properties === 'string'
-                      ? JSON.parse(snap.data.pe_properties)
-                      : snap.data.pe_properties;
-                  }
-
-                  const emailSubject = `👋 Sorry we missed you, ${leadToRetry.name}! — Zorvo Realty`;
-                  const emailBody = `
-                    <div style="background:rgba(197,160,89,0.07);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:20px;margin-bottom:24px">
-                      <p style="margin:0 0 8px;font-size:18px;font-weight:600;color:#faf8f4">Hi ${leadToRetry.name}! 👋</p>
-                      <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.8">
-                        We just tried calling you regarding your property search on our website, but it looks like the connection was dropped or cut.<br><br>
-                        No worries! <strong>We will try calling you back in about 5 minutes</strong> to see if that's a better time to talk.<br><br>
-                        If you'd rather browse our properties or schedule a free visit directly on our website, please use the links below.
-                      </p>
-                    </div>
-                    ${buildPropertyCards(properties)}
-                    ${ctaButton('Browse All Properties →')}
-                  `;
-
-                  sendEmail({
-                    to: leadToRetry.email,
-                    subject: emailSubject,
-                    html: wrapEmail('Sorry We Missed You!', 'We will try calling you back shortly', emailBody),
-                    message: `Hi ${leadToRetry.name},\n\nWe just tried calling you, but the call was dropped or cut. We will try calling you back in 5 minutes!\n\nBrowse properties here: ${BASE_URL}`
-                  }).then(res => {
-                    if (res.success) console.log(`✅ Sent 'Sorry we missed you' email to ${leadToRetry.email}`);
-                    else console.error(`❌ Failed to send 'Sorry we missed you' email:`, res.error);
-                  }).catch(e => console.error(`Email send exception:`, e.message));
-                }
-
-                // Schedule background retry call after 5 minutes in MongoDB (Serverless-Safe)
-                await scheduleRetry(leadToRetry, triggerAICall, triggerFailoverMessages);
-
-                // Immediately progress to the next campaign lead
-                proceedToNext = true;
-
-              } else {
-                // Second call: No Answer -> Create Follow-Up Task, Notify Agent, Stop Calling
-                attempts[finalLeadId] = 2;
-                snap.data.pe_campaign_attempts = JSON.stringify(attempts);
-                stats.callsCompleted++;
-                stats.noAnswers++;
-
-                console.log(`⛔ Lead ${phone} did not answer on 2nd attempt. Creating task and progressing to next lead.`);
-
-                // Create follow up task
-                const { createClient } = require('@supabase/supabase-js');
-                const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-                await sb.from('tasks').insert({
-                  title: `Unanswered Call Follow Up: ${call.customer?.name || phone}`,
-                  description: `Lead failed to pick up two sequential campaign calls. Please call manually.`,
-                  due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-                  priority: 'high',
-                  status: 'pending'
-                });
-
-                // Notify Agent
-                await sendEmail({
-                  to: AGENT_EMAIL,
-                  subject: `[ZORVO ALERT] Campaign Call Unanswered: ${call.customer?.name || phone}`,
-                  html: `<div style="font-family:sans-serif; padding:20px; background:#05070a; color:#dee4ed; border:1px solid #c5a059; border-radius:10px;">
-                    <h3>Unanswered Campaign Lead Alert</h3>
-                    <p>Lead <b>${call.customer?.name || phone}</b> failed to answer two sequential campaign call attempts.</p>
-                    <p>A high-priority manual follow-up task has been logged in your dashboard.</p>
-                  </div>`
-                });
-
-                proceedToNext = true;
-              }
-            } else {
-              // Answered call -> process stats
-              stats.callsCompleted++;
-              if (outcome === 'BOOKED') stats.bookings++;
-              else if (outcome === 'FOLLOW UP') stats.followUps++;
-              else if (outcome === 'NOT INTERESTED') stats.notInterested++;
-
-              proceedToNext = true;
-            }
-
-            snap.data.pe_campaign_stats = JSON.stringify(stats);
-
-            if (proceedToNext) {
-              if (queue.length > 0) {
-                const completedLeadId = queue.shift();
-                console.log(`🚀 Campaign moving to next lead in queue. Shifted completed lead ${completedLeadId}. ${queue.length} remaining.`);
-
-                snap.data.pe_campaign_queue = JSON.stringify(queue);
-
-                if (queue.length === 0) {
-                  snap.data.pe_campaign_status = 'COMPLETED';
-                  console.log('🏁 Campaign completed.');
-                }
-
-                snap.markModified('data');
-                await snap.save();
-
-                if (queue.length > 0) {
-                  const nextLeadId = queue[0]; // Dial the NEXT lead in the queue!
-                  
-                  let nextLeadData = null;
-                  const { createClient } = require('@supabase/supabase-js');
-                  const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-                  
-                  try {
-                    let { data: nextLeadDataSb } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
-                    if (nextLeadDataSb) nextLeadData = nextLeadDataSb;
-                    else {
-                      let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
-                      if (tLeadData) nextLeadData = tLeadData;
-                    }
-                  } catch (e) { }
-
-                  if (!nextLeadData) {
-                    // Fallback: Check local MongoDB snapshot pe_leads list
-                    try {
-                      let leads = typeof snap.data.pe_leads === 'string'
-                        ? JSON.parse(snap.data.pe_leads)
-                        : snap.data.pe_leads;
-                      if (Array.isArray(leads)) {
-                        const mongoLead = leads.find(l => l.id == nextLeadId);
-                        if (mongoLead) {
-                          nextLeadData = mongoLead;
-                        }
-                      }
-                    } catch (e) { }
-                  }
-
-                  if (nextLeadData && nextLeadData.phone) {
-                    console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    await triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
-                  } else {
-                    console.log(`⚠️ Could not find lead ${nextLeadId} in Supabase or MongoDB to continue campaign.`);
-                  }
-                }
-              } else {
-                snap.data.pe_campaign_status = 'COMPLETED';
-                snap.data.pe_campaign_queue = JSON.stringify([]);
-                console.log('🏁 Campaign completed.');
-                snap.markModified('data');
-                await snap.save();
-              }
-            } else {
-              // Just save the state for retries
-              snap.markModified('data');
-              await snap.save();
-            }
-          }
+          console.log(`[CAMPAIGN] Processing outcome: ${callStatus} for lead ${finalLeadId}`);
+          await advanceCampaignQueue(snapForCampaign, finalLeadId, callStatus, campaignStats);
         }
       } catch (queueErr) {
-        console.error('❌ Error processing campaign queue:', queueErr.message);
+        console.error('[CAMPAIGN] ❌ Error processing campaign queue:', queueErr.message);
       }
-    }
 
-    // ── hang — lead hung up ──────────────────────────────────────────────────
+    // ── hang — lead disconnected mid-call ──────────────────────────────────
+    // NOTE: end-of-call-report fires next with full outcome data. We only log here.
     else if (type === 'hang') {
-      console.log(`📵 Lead hung up: ${phone}`);
+      console.log(`[CALL] 📵 Lead disconnected mid-call: ${phone} — awaiting end-of-call-report for full outcome processing`);
     }
 
     if (!res.headersSent) {
