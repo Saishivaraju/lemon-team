@@ -2467,11 +2467,13 @@ app.post('/api/vapi/webhook', async (req, res) => {
   console.log(`📡 VAPI webhook: ${type}`);
 
   // 1. FAST RESPONSE: Respond immediately for non-synchronous events to prevent Vapi timeouts
-  if (type !== 'function-call' && type !== 'tool-calls' && type !== 'assistant-request') {
+  // Note: We MUST NOT respond instantly for 'end-of-call-report' in serverless platforms,
+  // as Vercel will freeze/kill the container before the follow-up/retries/campaign triggers can run!
+  if (type !== 'function-call' && type !== 'tool-calls' && type !== 'assistant-request' && type !== 'end-of-call-report') {
     res.json({ received: true });
 
     // We only process targetEvents asynchronously
-    const targetEvents = ['call-started', 'end-of-call-report', 'hang', 'status-update'];
+    const targetEvents = ['call-started', 'hang', 'status-update'];
     if (!targetEvents.includes(type)) {
       return;
     }
