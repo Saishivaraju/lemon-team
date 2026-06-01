@@ -1856,26 +1856,33 @@ app.post('/api/leads', async (req, res) => {
       // If teamId provided, assign to agent first (team mode)
       const teamId = req.body.teamId || null;
       if (teamId) {
-        const { assignLeadToAgent, saveTeamLead } = require('../services/team');
-        assignLeadToAgent(lead, teamId).then(agent => {
+        try {
+          const { assignLeadToAgent, saveTeamLead } = require('../services/team');
+          const agent = await assignLeadToAgent(lead, teamId);
           if (agent) {
             lead.id = null; // will be set after saveTeamLead
             lead.agent_id = agent.id;
             lead.team_id = teamId;
             lead.assigned_agent_name = agent.name;
             lead.assigned_agent_phone = agent.phone;
-            saveTeamLead(lead, agent.id, teamId).then(saved => {
-              lead.id = saved.data?.id || null;
-            });
+            const saved = await saveTeamLead(lead, agent.id, teamId);
+            lead.id = saved.data?.id || null;
           }
-        }).catch(e => console.error('Team assign error:', e.message));
+        } catch (e) {
+          console.error('Team assign error:', e.message);
+        }
       }
 
-      triggerAICall(lead).then(result => {
-        if (result.success) {
+      try {
+        const aiResult = await triggerAICall(lead);
+        if (aiResult.success) {
           console.log(`⚡ Instant AI call fired for ${lead.name} (${lead.phone})`);
+        } else {
+          console.error(`❌ Instant AI call failed: ${aiResult.error}`);
         }
-      });
+      } catch (e) {
+        console.error('AI trigger error:', e.message);
+      }
 
       // 📱 NEW: Cloud Mailbox for Laptop-Free AI
       pendingLeads.push(lead);
