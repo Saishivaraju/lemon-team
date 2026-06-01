@@ -2800,23 +2800,11 @@
   <div class="flow-wrap" id="modal-booking" onclick="if(event.target===this)closeFlow()">
     <div class="flow-box" style="max-width:500px">
       <div class="flow-head">
-        <span class="flow-step-badge">Step 3 of 3</span>
         <span class="flow-title">Schedule Your Visit</span>
         <button class="flow-close" onclick="closeFlow()"><i class="fas fa-xmark"></i></button>
       </div>
       <div class="flow-body">
-        <div class="flow-progress">
-          <div class="flow-prog-dot done"></div>
-          <div class="flow-prog-dot done"></div>
-          <div class="flow-prog-dot active"></div>
-        </div>
         <div id="booking-form-inner">
-          <div
-            style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding:10px 14px;background:rgba(46,204,138,.06);border:1px solid rgba(46,204,138,.2);border-radius:4px">
-            <span style="color:#2ecc8a;font-size:16px"><i class="fas fa-circle-check"></i></span>
-            <span style="font-size:12px;color:rgba(255,255,255,.6)">Pre-qualified & agreement signed — you're all
-              set!</span>
-          </div>
           <div
             style="font-size:11px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.3);margin-bottom:6px">
             Property</div>
@@ -3424,19 +3412,11 @@
       selectedSlot = null;
       closeFlow(); // clear any open ones
 
-      // Reset qualification UI back to step 1
-      const steps = ['qual-step-contact','qual-step-budget','qual-step-bhk','qual-result'];
-      steps.forEach((id, i) => { const el = document.getElementById(id); if (el) el.style.display = i === 0 ? 'block' : 'none'; });
-      ['prog1','prog2','prog3'].forEach(id => { const el = document.getElementById(id); if (el) { el.classList.remove('active','done'); } });
-      document.querySelectorAll('.flow-opt').forEach(o => o.classList.remove('selected'));
-      const btnBudget = document.getElementById('btn-q-budget'); if (btnBudget) btnBudget.disabled = true;
-      const btnBhk = document.getElementById('btn-q-bhk'); if (btnBhk) btnBhk.disabled = true;
-      const btnAgree = document.getElementById('btn-to-agree'); if (btnAgree) btnAgree.style.display = 'none';
       // Reset booking success screen
       const bfi = document.getElementById('booking-form-inner'); if (bfi) bfi.style.display = 'block';
       const bs = document.getElementById('booking-success'); if (bs) bs.style.display = 'none';
 
-      document.getElementById('modal-qualify').classList.add('open');
+      openBookingModal();
       document.body.style.overflow = 'hidden';
     }
 
@@ -3612,13 +3592,24 @@
       closeFlow();
       document.getElementById('modal-booking').classList.add('open');
       document.getElementById('bk2-property').value = flowData.propertyName;
-      document.getElementById('bk2-name').value = document.getElementById('q-name').value;
-      document.getElementById('bk2-email').value = document.getElementById('q-email').value;
-      const qPhone = window.itiInstances['q-phone'] ? window.itiInstances['q-phone'].getNumber() : document.getElementById('q-phone').value;
+      
+      // Clear the fields
+      document.getElementById('bk2-name').value = '';
+      document.getElementById('bk2-email').value = '';
+      
+      const phoneInput = document.getElementById('bk2-phone');
+      if (phoneInput && !window.itiInstances['bk2-phone']) {
+        window.itiInstances['bk2-phone'] = window.intlTelInput(phoneInput, {
+          initialCountry: 'ae',
+          preferredCountries: ['ae', 'sa', 'qa', 'kw', 'bh', 'om', 'in', 'gb', 'us'],
+          separateDialCode: true,
+          utilsScript: "https://cdnjs.cloudflare.com/ajax/libs/intl-tel-input/17.0.8/js/utils.js"
+        });
+      }
       if (window.itiInstances['bk2-phone']) {
-        window.itiInstances['bk2-phone'].setNumber(qPhone);
+        window.itiInstances['bk2-phone'].setNumber('');
       } else {
-        document.getElementById('bk2-phone').value = qPhone;
+        phoneInput.value = '';
       }
 
       const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
@@ -3693,6 +3684,25 @@
       try {
         const ctrl = new AbortController();
         setTimeout(() => ctrl.abort(), 10000);
+        
+        // 1. Explicitly save the Lead first since we removed the qualification step
+        const leadPayload = {
+          name: nameVal,
+          email: emailVal,
+          phone: visit.client_phone,
+          property_interest: flowData.propertyName,
+          budget: 'Not specified',
+          bhk_preference: 'Not specified',
+          pre_approval_status: 'Not specified',
+          source: 'Website Booking'
+        };
+        await fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          body: JSON.stringify({ agentEmail: agent.email || 'saishivaraju.m2002@gmail.com', lead: leadPayload })
+        }).catch(e => console.warn('Failed to save lead prior to booking:', e));
+
+        // 2. Save the Visit
         const res = await fetch('/api/visits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
