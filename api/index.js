@@ -47,15 +47,15 @@ async function triggerAICall(lead) {
     try {
       const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
       if (snapshot && snapshot.data && snapshot.data.pe_properties) {
-        properties = typeof snapshot.data.pe_properties === 'string' 
-          ? JSON.parse(snapshot.data.pe_properties) 
+        properties = typeof snapshot.data.pe_properties === 'string'
+          ? JSON.parse(snapshot.data.pe_properties)
           : snapshot.data.pe_properties;
       }
     } catch (e) { console.error('Error fetching properties for outbound:', e.message); }
 
     const data = await makeOutboundCall({ ...lead, email: lead.email || null }, properties);
     console.log(`📞 VAPI call triggered → ID: ${data.callId || 'sim'} for ${lead.name}`);
-    
+
     // If successful, we clear any previous retries. 
     // If it fails immediately (API error), we return the failure so the caller can schedule a retry.
     if (data.success) {
@@ -180,7 +180,7 @@ async function getLeadEmail(leadId) {
 
 async function triggerFailoverMessages(lead) {
   const { phone, name, id: leadId, email: leadEmailMeta } = lead;
-  
+
   console.log(`📤 Triggering email failover for lead: ${name || phone}`);
   const leadName = name || 'there';
 
@@ -207,25 +207,25 @@ async function triggerFailoverMessages(lead) {
     ['available', 'Available', 'active', 'Active'].includes(p.status) || !p.status
   );
 
-  const BASE_URL  = process.env.BASE_URL  || 'https://scaleover-lemon.vercel.app';
+  const BASE_URL = process.env.BASE_URL || 'https://scaleover-lemon.vercel.app';
   const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
   const companyName = process.env.COMPANY_NAME || 'Zorvo Realty';
 
   // ── Build property cards HTML ─────────────────────────────────────────────
   const propertyCardsHtml = available.length > 0
     ? available.map((p, i) => {
-        const propName     = p.name || p.title || `Property ${i + 1}`;
-        const propType     = p.property_type || p.type || 'Property';
-        const propLocation = p.location || 'Prime Location';
-        const propPrice    = p.price_label || p.price || 'Contact for Price';
-        const propBHK      = p.bhk || p.bedrooms || '';
-        const propFeatures = Array.isArray(p.features)
-          ? p.features.slice(0, 3).join(' · ')
-          : (p.features || '');
-        const propId       = p.id || (i + 1);
-        const propLink     = `${BASE_URL}/index.html#property-${propId}`;
-        const mapsLink     = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propName + ' ' + propLocation)}`;
-        return `
+      const propName = p.name || p.title || `Property ${i + 1}`;
+      const propType = p.property_type || p.type || 'Property';
+      const propLocation = p.location || 'Prime Location';
+      const propPrice = p.price_label || p.price || 'Contact for Price';
+      const propBHK = p.bhk || p.bedrooms || '';
+      const propFeatures = Array.isArray(p.features)
+        ? p.features.slice(0, 3).join(' · ')
+        : (p.features || '');
+      const propId = p.id || (i + 1);
+      const propLink = `${BASE_URL}/index.html#property-${propId}`;
+      const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propName + ' ' + propLocation)}`;
+      return `
           <tr>
             <td style="padding:16px 0;border-bottom:1px solid rgba(197,160,89,0.15)">
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
@@ -254,7 +254,7 @@ async function triggerFailoverMessages(lead) {
               </table>
             </td>
           </tr>`;
-      }).join('')
+    }).join('')
     : `<tr><td style="padding:20px 0;color:rgba(255,255,255,0.4);font-size:14px">We have a curated selection of premium properties matching your criteria. Please visit our website to explore them.</td></tr>`;
 
   // ── Build rich HTML email ─────────────────────────────────────────────────
@@ -360,11 +360,10 @@ async function triggerFailoverMessages(lead) {
 </body>
 </html>`;
 
-  const plainText = `Hi ${leadName},\n\nI just tried calling you regarding your interest in our properties but wasn't able to reach you.\n\nHere is a selection of properties that match your criteria:\n\n${
-    available.slice(0, 6).map((p, i) =>
-      `${i+1}. ${p.name || p.title || 'Property'} — ${p.property_type || 'Property'} — ${p.location || 'N/A'} — ${p.price_label || p.price || 'Contact Agent'}\n   View: ${BASE_URL}/index.html#property-${p.id || (i+1)}`
-    ).join('\n\n') || 'Please visit our website to browse all available properties.'
-  }\n\nBook a free visit: ${BASE_URL}\n\nYour Agent:\n${AGENT_NAME}\n${agentPhone}\n${AGENT_EMAIL}\n${companyName}`;
+  const plainText = `Hi ${leadName},\n\nI just tried calling you regarding your interest in our properties but wasn't able to reach you.\n\nHere is a selection of properties that match your criteria:\n\n${available.slice(0, 6).map((p, i) =>
+    `${i + 1}. ${p.name || p.title || 'Property'} — ${p.property_type || 'Property'} — ${p.location || 'N/A'} — ${p.price_label || p.price || 'Contact Agent'}\n   View: ${BASE_URL}/index.html#property-${p.id || (i + 1)}`
+  ).join('\n\n') || 'Please visit our website to browse all available properties.'
+    }\n\nBook a free visit: ${BASE_URL}\n\nYour Agent:\n${AGENT_NAME}\n${agentPhone}\n${AGENT_EMAIL}\n${companyName}`;
 
   try {
     const result = await sendEmail({
@@ -415,7 +414,7 @@ async function robustUpdateLeadStage(leadId, stage) {
   try {
     const { createClient } = require('@supabase/supabase-js');
     const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    
+
     const isUUID = typeof leadId === 'string' && leadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/);
     if (!isUUID) return { success: false, error: 'Invalid UUID format' };
 
@@ -431,7 +430,7 @@ async function robustUpdateLeadStage(leadId, stage) {
       const { error } = await sb.from('leads').update({ status: titleStage }).eq('id', leadId);
       return { success: !error, error };
     }
-    
+
     return { success: false, error: 'Lead not found in database' };
   } catch (err) {
     console.error('❌ robustUpdateLeadStage Error:', err.message);
@@ -520,11 +519,11 @@ app.get('/api/integration-status', async (req, res) => {
   const { email } = req.query;
   const tokens = await PeToken.find({ email });
   const status = {
-    google:    tokens.some(t => t.platform === 'google'),
-    whatsapp:  false,  // WhatsApp (Plivo) removed — Email-only failover
-    sms:       false,  // SMS (Plivo) removed — Email-only failover
-    email:     !!(process.env.RESEND_API_KEY),
-    vapi:      !!(process.env.VAPI_API_KEY),
+    google: tokens.some(t => t.platform === 'google'),
+    whatsapp: false,  // WhatsApp (Plivo) removed — Email-only failover
+    sms: false,  // SMS (Plivo) removed — Email-only failover
+    email: !!(process.env.RESEND_API_KEY),
+    vapi: !!(process.env.VAPI_API_KEY),
   };
   res.json(status);
 });
@@ -811,20 +810,20 @@ app.post('/api/whatsapp', async (req, res) => {
 function parseRelativeDate(dateStr) {
   if (!dateStr) return dateStr;
   const lower = String(dateStr).toLowerCase().trim();
-  
+
   // If it's already YYYY-MM-DD, return it
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
-  
+
   const now = new Date();
   const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  
+
   if (lower === 'today') return now.toISOString().split('T')[0];
   if (lower === 'tomorrow') {
     const tomorrow = new Date(now);
     tomorrow.setDate(now.getDate() + 1);
     return tomorrow.toISOString().split('T')[0];
   }
-  
+
   // Handle "next thursday", "this friday"
   const cleanDay = lower.replace(/next |this /g, '');
   const dayIndex = days.indexOf(cleanDay);
@@ -836,13 +835,13 @@ function parseRelativeDate(dateStr) {
     targetDate.setDate(now.getDate() + diff);
     return targetDate.toISOString().split('T')[0];
   }
-  
+
   return dateStr; // Fallback
 }
 
 async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
   if (!agentEmail || !visit) throw new Error('agentEmail and visit required');
-  
+
   // Pre-parse date
   visit.visit_date = parseRelativeDate(visit.visit_date);
 
@@ -886,7 +885,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
   try {
     const { createClient } = require('@supabase/supabase-js');
     const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    
+
     if (visit.lead_id) {
       const { data } = await sb.from('visits')
         .select('*')
@@ -943,7 +942,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
     }
   } catch (supabaseError) {
     console.warn('⚠️ Supabase connection failed, falling back to MongoDB Snapshots:', supabaseError.message);
-    
+
     // FALLBACK TO MONGODB SNAPSHOTS
     if (mongoose.connection.readyState !== 1) {
       isReschedule = false;
@@ -954,23 +953,23 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
       let bookings = snapshot.data.pe_bookings || [];
       if (typeof bookings === 'string') { try { bookings = JSON.parse(bookings); } catch (e) { bookings = []; } }
 
-      const existingMongoVisit = bookings.find(b => 
-        (visit.lead_id && b.lead_id === visit.lead_id) || 
+      const existingMongoVisit = bookings.find(b =>
+        (visit.lead_id && b.lead_id === visit.lead_id) ||
         (visit.client_phone && b.client_phone === visit.client_phone)
       );
 
       if (existingMongoVisit) {
         isReschedule = true;
         console.log(`🔄 Enforcing single-visit rule (MongoDB Fallback): Found active visit ${existingMongoVisit.id}. Rescheduling.`);
-        savedVisit = { 
-          id: existingMongoVisit.id, 
-          created_at: existingMongoVisit.created_at || new Date().toISOString() 
+        savedVisit = {
+          id: existingMongoVisit.id,
+          created_at: existingMongoVisit.created_at || new Date().toISOString()
         };
       } else {
         isReschedule = false;
-        savedVisit = { 
-          id: 'visit_' + Date.now(), 
-          created_at: new Date().toISOString() 
+        savedVisit = {
+          id: 'visit_' + Date.now(),
+          created_at: new Date().toISOString()
         };
       }
     }
@@ -988,7 +987,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
         if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: { pe_bookings: [] } });
         let bookings = snapshot.data.pe_bookings || [];
         if (typeof bookings === 'string') { try { bookings = JSON.parse(bookings); } catch (e) { bookings = []; } }
-        
+
         if (isReschedule) {
           const idx = bookings.findIndex(b => b.id === realId);
           if (idx !== -1) {
@@ -1011,7 +1010,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
           const dashboardVisit = { ...visit, id: realId, status: 'confirmed', created_at: new Date().toISOString() };
           bookings.unshift(dashboardVisit);
         }
-        
+
         snapshot.data.pe_bookings = typeof snapshot.data.pe_bookings === 'string' ? JSON.stringify(bookings) : bookings;
         snapshot.markModified('data');
         await snapshot.save();
@@ -1054,13 +1053,13 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
             }
           }
         } catch (e) { console.error('Lookup address error:', e.message); }
- 
+
         const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
         const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
         const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
- 
+
         const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propertyAddress)}`;
- 
+
         if (isReschedule) {
           await sendEmail({
             to: visit.client_email,
@@ -1211,7 +1210,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
     try {
       const { createClient } = require('@supabase/supabase-js');
       const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-      
+
       let leadData = null;
       if (visit.client_phone) {
         const { data } = await sb.from('team_leads').select('id').eq('phone', visit.client_phone).limit(1);
@@ -1229,7 +1228,7 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
         const { data } = await sb.from('leads').select('id').eq('email', visit.client_email).limit(1);
         if (data && data.length > 0) leadData = data[0];
       }
-      
+
       if (leadData) finalLeadId = leadData.id;
     } catch (e) {
       console.error('Error finding UUID for stage update:', e.message);
@@ -1617,11 +1616,11 @@ app.post('/api/ai/call-script', async (req, res) => {
   try {
     const { lead, properties, notes } = req.body;
     if (!lead) return res.status(400).json({ error: 'lead required' });
-    
+
     // We can reuse a similar approach or call a newly created service
     const { generateCallScript } = require('../services/ai');
     const result = await generateCallScript(lead, properties, notes);
-    
+
     if (result.success) res.json({ script: result.script });
     else res.status(500).json({ error: result.error });
   } catch (error) {
@@ -1685,7 +1684,7 @@ app.get('/api/ai/properties', async (req, res) => {
 app.post('/api/leads', async (req, res) => {
   try {
     let { agentEmail, lead } = req.body;
-    
+
     // If body is a flat lead object, try to extract agentEmail from env or default
     if (!lead && (req.body.name || req.body.phone)) {
       lead = { ...req.body };
@@ -1713,7 +1712,7 @@ app.post('/api/leads', async (req, res) => {
 
       lead.created_at = lead.created_at || new Date().toISOString();
       lead.id = lead.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
-      
+
       const existingIdx = leads.findIndex(l => (l.phone && l.phone === lead.phone) || (l.email && l.email === lead.email));
       if (existingIdx !== -1) {
         // Update existing lead instead of adding duplicate
@@ -1910,7 +1909,7 @@ app.post('/api/leads/:id/trigger-call', async (req, res) => {
 
     console.log(`🚀 Manually triggering AI call for ${lead.name} (${lead.phone})`);
     const data = await triggerAICall(lead);
-    
+
     res.json({ success: true, data });
   } catch (err) {
     console.error('❌ Manual trigger failed:', err.message);
@@ -2116,9 +2115,9 @@ app.post('/api/ai/chat', async (req, res) => {
     const channel = (sessionId && sessionId.startsWith('wa_')) ? 'WHATSAPP' : 'VOICE';
     const systemPrompt = await buildPriyaPrompt(AGENT_EMAIL, channel);
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-3-flash-preview",
-      systemInstruction: systemPrompt 
+      systemInstruction: systemPrompt
     });
 
     const contents = session.history.map(h => ({ role: h.role, parts: h.parts }));
@@ -2276,15 +2275,15 @@ app.post('/api/marketing/kit', async (req, res) => {
 // ── OFFICIAL META WHATSAPP CLOUD API — For Vapi Tool Calls ───────────────────
 app.post('/api/ai/whatsapp', async (req, res) => {
   try {
-    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments 
-             || req.body.message?.functionCall?.parameters 
-             || req.body;
+    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments
+      || req.body.message?.functionCall?.parameters
+      || req.body;
 
     if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
 
     console.log(`☁️ Cloud WhatsApp Request for ${phone}`);
 
-    const TOKEN    = process.env.WHATSAPP_TOKEN;
+    const TOKEN = process.env.WHATSAPP_TOKEN;
     const PHONE_ID = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
     if (!TOKEN || !PHONE_ID) {
@@ -2292,7 +2291,7 @@ app.post('/api/ai/whatsapp', async (req, res) => {
       return res.json({ success: true, simulated: true, message: 'Env vars missing' });
     }
 
-    const fetch = (...args) => import('node-fetch').then(({default: f}) => f(...args));
+    const fetch = (...args) => import('node-fetch').then(({ default: f }) => f(...args));
     const response = await fetch(`https://graph.facebook.com/v20.0/${PHONE_ID}/messages`, {
       method: 'POST',
       headers: {
@@ -2308,14 +2307,14 @@ app.post('/api/ai/whatsapp', async (req, res) => {
     });
 
     const data = await response.json();
-    
+
     if (data.error) {
       console.error('❌ Meta WhatsApp Error:', data.error.message);
       return res.status(500).json({ success: false, error: data.error.message });
     }
 
     console.log(`✅ Meta WhatsApp Sent to ${phone}`);
-    res.json({ 
+    res.json({
       results: [{
         toolCallId: req.body.message?.toolCalls?.[0]?.id || '1',
         result: "Message sent successfully via WhatsApp."
@@ -2420,11 +2419,11 @@ app.post('/api/vapi/webhook', async (req, res) => {
   const type = event?.message?.type || event?.type;
 
   console.log(`📡 VAPI webhook: ${type}`);
-  
+
   // 1. FAST RESPONSE: Respond immediately for non-synchronous events to prevent Vapi timeouts
-  if (type !== 'function-call' && type !== 'assistant-request') {
+  if (type !== 'function-call' && type !== 'tool-calls' && type !== 'assistant-request') {
     res.json({ received: true });
-    
+
     // We only process targetEvents asynchronously
     const targetEvents = ['call-started', 'end-of-call-report', 'hang', 'status-update'];
     if (!targetEvents.includes(type)) {
@@ -2444,7 +2443,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
     // ── call-started ────────────────────────────────────────────────────────
     if (type === 'call-started' || (type === 'status-update' && event?.message?.status === 'in-progress')) {
       console.log(`📞 VAPI call started → ${phone}`);
-      
+
       let finalLeadId = leadId;
       if (!finalLeadId || (typeof finalLeadId === 'string' && !finalLeadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/))) {
         try {
@@ -2460,7 +2459,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
             if (data && data.length > 0) leadData = data[0];
           }
           if (leadData) finalLeadId = leadData.id;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (finalLeadId) {
@@ -2469,44 +2468,68 @@ app.post('/api/vapi/webhook', async (req, res) => {
       }
       if (phone) await cancelRetry(phone);
     }
-    
+
     // ── assistant-request — VAPI wants assistant for inbound call ───────────
     else if (type === 'assistant-request') {
       console.log(`🙋 Incoming call from ${phone} — providing assistant config`);
-      
+
       // Fetch current properties to give the AI context
       let properties = [];
       try {
         const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
         if (snapshot && snapshot.data && snapshot.data.pe_properties) {
-          properties = typeof snapshot.data.pe_properties === 'string' 
-            ? JSON.parse(snapshot.data.pe_properties) 
+          properties = typeof snapshot.data.pe_properties === 'string'
+            ? JSON.parse(snapshot.data.pe_properties)
             : snapshot.data.pe_properties;
         }
       } catch (e) { console.error('Error fetching properties for inbound:', e.message); }
 
       const config = buildAssistantConfig(properties);
-      
+
       // Customize first message for inbound calls
       config.firstMessage = `Hi there! Thank you for calling Zorvo Realty. This is Sarah speaking. How can I help you find your dream home today?`;
-      
+
       return res.json({ assistant: config });
     }
 
     // ── function-call — AI wants to book a visit ─────────────────────────────
-    else if (type === 'function-call') {
-      const fnName = event?.message?.functionCall?.name;
-      const fnArgs = event?.message?.functionCall?.parameters || {};
+    // ── function-call / tool-calls — AI executes custom tool/function ────────
+    else if (type === 'function-call' || type === 'tool-calls') {
+      let fnName = null;
+      let fnArgs = {};
+      let toolCallId = null;
 
-      console.log(`🔧 VAPI function call: ${fnName}`, fnArgs);
+      if (type === 'function-call') {
+        fnName = event?.message?.functionCall?.name;
+        fnArgs = event?.message?.functionCall?.parameters || {};
+        toolCallId = event?.message?.functionCall?.id || event?.message?.id || '1';
+      } else if (type === 'tool-calls') {
+        const toolCall = event?.message?.toolCalls?.[0] || event?.toolCalls?.[0];
+        fnName = toolCall?.function?.name;
+        fnArgs = toolCall?.function?.arguments;
+        if (typeof fnArgs === 'string') {
+          try {
+            fnArgs = JSON.parse(fnArgs);
+          } catch (e) {
+            console.error('Failed to parse toolCall arguments JSON string:', e.message);
+          }
+        }
+        fnArgs = fnArgs || {};
+        toolCallId = toolCall?.id || '1';
+      }
+
+      console.log(`🔧 VAPI tool/function call: ${fnName} (Type: ${type})`, fnArgs);
 
       if (fnName === 'bookVisit') {
+        console.log('[BOOKVISIT STARTED]');
+        console.log('[REQUEST RECEIVED] Raw Arguments:', JSON.stringify(fnArgs));
+
         // Get lead details from DB
         let leadInfo = {};
         try {
           const { createClient } = require('@supabase/supabase-js');
           const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-          
+
           // 1. Try team_leads by ID
           if (leadId) {
             const { data } = await sb.from('team_leads').select('*').eq('id', leadId).single();
@@ -2533,38 +2556,61 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
         // Save the booking
         try {
+          const clientName = fnArgs.client_name || fnArgs.name || leadInfo.name || call.customer?.name || 'Lead';
+          const clientEmail = normalizeEmail(fnArgs.client_email || fnArgs.email || leadInfo.email || call.customer?.email || '');
+          const clientPhone = normalizePhone(phone || fnArgs.client_phone || fnArgs.phone || leadInfo.phone || '');
           const normalizedDate = normalizeDate(fnArgs.visit_date);
           const normalizedTime = normalizeTime(fnArgs.visit_time);
-          const normalizedPhone = normalizePhone(phone || leadInfo.phone || '');
-          const normalizedEmail = normalizeEmail(leadInfo.email || call.customer?.email || '');
+          const propertyInterest = fnArgs.property_interest || fnArgs.property_name || leadInfo.property_interest || 'Property Visit';
+
+          console.log('[EXTRACTED DATA]', {
+            name: clientName,
+            email: clientEmail,
+            phone: clientPhone,
+            date: normalizedDate,
+            time: normalizedTime,
+            property: propertyInterest
+          });
 
           if (!normalizedDate || !normalizedDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-            return res.json({
+            console.log('[VALIDATION RESULT] Validation FAILED: Invalid date:', fnArgs.visit_date);
+            const responsePayload = {
               results: [{
-                toolCallId: event.message.functionCall.id,
+                toolCallId: toolCallId,
                 result: `I am sorry, but "${fnArgs.visit_date}" is not a valid date. Could you specify the exact date?`
-              }]
-            });
+              }],
+              success: false,
+              reason: `Detailed failure reason: "${fnArgs.visit_date}" is not a valid date format YYYY-MM-DD`
+            };
+            console.log('[RESPONSE SENT TO VAPI]', JSON.stringify(responsePayload));
+            return res.json(responsePayload);
           }
 
           if (!normalizedTime || !normalizedTime.match(/^\d{2}:\d{2}/)) {
-            return res.json({
+            console.log('[VALIDATION RESULT] Validation FAILED: Invalid time:', fnArgs.visit_time);
+            const responsePayload = {
               results: [{
-                toolCallId: event.message.functionCall.id,
+                toolCallId: toolCallId,
                 result: `I am sorry, but "${fnArgs.visit_time}" is not a valid time. Could you tell me what time works best?`
-              }]
-            });
+              }],
+              success: false,
+              reason: `Detailed failure reason: "${fnArgs.visit_time}" is not a valid time format HH:MM`
+            };
+            console.log('[RESPONSE SENT TO VAPI]', JSON.stringify(responsePayload));
+            return res.json(responsePayload);
           }
+
+          console.log('[VALIDATION RESULT] Validation PASSED');
 
           const visitPayload = {
             agentEmail: AGENT_EMAIL,
             is_ai_booking: true,
             visit: {
               lead_id: leadId || leadInfo.id || null,
-              client_name: leadInfo.name || call.customer?.name || 'Lead',
-              client_phone: normalizedPhone,
-              client_email: normalizedEmail,
-              property_name: fnArgs.property_interest || leadInfo.property_interest || 'Property Visit',
+              client_name: clientName,
+              client_phone: clientPhone,
+              client_email: clientEmail,
+              property_name: propertyInterest,
               visit_date: normalizedDate,
               visit_time: normalizedTime,
               notes: `Booked by VAPI AI agent — call ID: ${call.id}`,
@@ -2573,25 +2619,35 @@ app.post('/api/vapi/webhook', async (req, res) => {
           };
 
           const bookingResult = await processVisitBooking(visitPayload);
-          
+          console.log('[DB SAVE RESULT]', JSON.stringify(bookingResult));
+
           if (phone) await cancelFollowUps(phone);
 
-          console.log(`✅ VAPI booking saved via processVisitBooking: ${fnArgs.visit_date} ${fnArgs.visit_time}`);
-          
-          return res.json({
+          console.log(`✅ VAPI booking saved via processVisitBooking: ${normalizedDate} ${normalizedTime}`);
+
+          const responsePayload = {
             results: [{
-              toolCallId: event.message.functionCall.id,
-              result: `Visit successfully booked for ${fnArgs.visit_date} at ${fnArgs.visit_time}. Tell the customer we look forward to seeing them!`
-            }]
-          });
+              toolCallId: toolCallId,
+              result: `Visit successfully booked for ${normalizedDate} at ${normalizedTime}. Tell the customer we look forward to seeing them!`
+            }],
+            success: true,
+            message: "Visit booked successfully"
+          };
+          console.log('[RESPONSE SENT TO VAPI]', JSON.stringify(responsePayload));
+          return res.json(responsePayload);
         } catch (bookingError) {
           console.error('❌ VAPI tool bookVisit failed:', bookingError.message || bookingError.error);
-          return res.json({
+          console.log('[DB SAVE RESULT] Database save operation FAILED:', bookingError.message || bookingError.error);
+          const responsePayload = {
             results: [{
-              toolCallId: event.message.functionCall.id,
+              toolCallId: toolCallId,
               result: `I am sorry, but I couldn't book that slot: ${bookingError.error || bookingError.message}. Please ask the customer for a different time.`
-            }]
-          });
+            }],
+            success: false,
+            reason: `Detailed failure reason: ${bookingError.error || bookingError.message}`
+          };
+          console.log('[RESPONSE SENT TO VAPI]', JSON.stringify(responsePayload));
+          return res.json(responsePayload);
         }
       }
 
@@ -2601,7 +2657,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         if (transferPhone && !transferPhone.startsWith('+')) {
           transferPhone = '+' + transferPhone;
         }
-        
+
         // 1. Notify agent via Email
         try {
           await sendEmail({
@@ -2637,9 +2693,11 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
         return res.json({
           results: [{
-            toolCallId: event.message.functionCall.id,
+            toolCallId: toolCallId,
             result: "Transferring you to a live agent now. One moment please."
-          }]
+          }],
+          success: true,
+          message: "Transfer initiated successfully"
         });
       }
 
@@ -2667,11 +2725,23 @@ Please check the market and contact them within 5 hours.
 
         return res.json({
           results: [{
-            toolCallId: event.message.functionCall.id,
+            toolCallId: toolCallId,
             result: 'Successfully notified the agent. Please tell the user: I have sent your details to our senior agent, he will check the market and inform you within 5 hours.'
-          }]
+          }],
+          success: true,
+          message: "Agent notified successfully of unmatched request"
         });
       }
+
+      // Fallback response for unhandled tools to prevent silent failure or timeout
+      return res.json({
+        results: [{
+          toolCallId: toolCallId || '1',
+          result: `Unknown or unhandled tool call: ${fnName}`
+        }],
+        success: false,
+        reason: `Unknown or unhandled tool call: ${fnName}`
+      });
     }
 
     // ── end-of-call-report — call ended, save everything ────────────────────
@@ -2691,8 +2761,8 @@ Please check the market and contact them within 5 hours.
       const transcript = report.transcript || '';
       const recording = report.recordingUrl || null;
       const endedReason = report.endedReason || 'unknown';
-      const duration    = report.durationSeconds || 0;
-      const isFailed    = ['customer-busy', 'customer-did-not-answer', 'voicemail', 'customer-did-not-pick-up', 'phone-number-not-found', 'network-error'].includes(endedReason);
+      const duration = report.durationSeconds || 0;
+      const isFailed = ['customer-busy', 'customer-did-not-answer', 'voicemail', 'customer-did-not-pick-up', 'phone-number-not-found', 'network-error'].includes(endedReason);
 
       console.log(`📋 VAPI call ended. Duration: ${duration}s | Reason: ${endedReason}`);
 
@@ -2727,7 +2797,7 @@ Please check the market and contact them within 5 hours.
         notes: aiIntelligence.call_summary || analysis.summary || transcript.substring(0, 500) || null,
         status: 'Contacted',
         qualification_score: aiIntelligence.closing_probability || parseInt(structuredData.qualification_score || structuredData.score || (structuredData.pre_approval_status === 'yes' ? 90 : 70)) || 70,
-        
+
         // NEW INTELLIGENCE FIELDS
         lead_score: aiIntelligence.lead_score || 'WARM',
         priority: aiIntelligence.priority || 'FOLLOW UP',
@@ -2754,7 +2824,7 @@ Please check the market and contact them within 5 hours.
           if (lData) existingLead = { table: 'leads', data: lData };
         }
       }
-      
+
       if (!existingLead && phone) {
         let { data } = await sb.from('team_leads').select('*').eq('phone', phone).single();
         if (data) {
@@ -2777,14 +2847,14 @@ Please check the market and contact them within 5 hours.
         if (extractedLead.pre_approval_status) updates.pre_approval_status = extractedLead.pre_approval_status;
         if (extractedLead.property_interest) updates.property_interest = extractedLead.property_interest;
         if (extractedLead.qualification_score) updates.qualification_score = extractedLead.qualification_score;
-        
+
         // Add new intelligence fields to Supabase updates if applicable
         if (extractedLead.lead_score) updates.lead_score = extractedLead.lead_score;
         if (extractedLead.priority) updates.priority = extractedLead.priority;
         if (extractedLead.intent) updates.intent = extractedLead.intent;
         if (extractedLead.timeline) updates.timeline = extractedLead.timeline;
         if (extractedLead.potential_commission) updates.potential_commission = extractedLead.potential_commission;
-        
+
         if (extractedLead.notes) updates.notes = (existingLead.data.notes ? existingLead.data.notes + '\n\n' : '') + `[AI Call Summary]: ${extractedLead.call_summary}\n[AI Notes]: ${extractedLead.ai_notes}\n[Objections]: ${extractedLead.objections.join(', ')}`;
         updates.stage = 'contacted';
         updates.updated_at = new Date().toISOString();
@@ -2812,7 +2882,7 @@ Please check the market and contact them within 5 hours.
       } else if (phone) {
         // Create new lead (inbound call)
         console.log(`➕ Creating new lead in database for inbound phone: ${phone}`);
-        
+
         const newLeadRecord = {
           name: extractedLead.name || 'New Inbound Lead',
           phone: phone,
@@ -2838,7 +2908,7 @@ Please check the market and contact them within 5 hours.
         try {
           const { data, error } = await sb.from('leads').insert([newLeadRecord]).select().single();
           if (data) savedSbLead = data;
-        } catch (e) {}
+        } catch (e) { }
 
         let savedTeamLead = null;
         try {
@@ -2855,13 +2925,13 @@ Please check the market and contact them within 5 hours.
           };
           const { data, error } = await sb.from('team_leads').insert([newTeamLeadRecord]).select().single();
           if (data) savedTeamLead = data;
-        } catch (e) {}
+        } catch (e) { }
 
         try {
           let snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
           if (!snapshot) snapshot = new DataSnapshot({ email: AGENT_EMAIL, data: {} });
           if (!snapshot.data) snapshot.data = {};
-          
+
           let leads = snapshot.data.pe_leads || [];
           if (typeof leads === 'string') {
             try { leads = JSON.parse(leads); } catch (e) { leads = []; }
@@ -2896,11 +2966,11 @@ Please check the market and contact them within 5 hours.
 
       // 4. Format and Sync Call Log and Transcript to MongoDB Snapshot pe_calls
       const leadNameForCall = (existingLead?.data?.name) || extractedLead.name || 'New Inbound Lead';
-      
+
       const minutes = Math.floor(duration / 60);
       const seconds = Math.floor(duration % 60);
       const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      
+
       const messages = event?.message?.call?.messages || event?.message?.messages || [];
       let formattedTranscript = [];
       if (messages.length > 0) {
@@ -2921,7 +2991,7 @@ Please check the market and contact them within 5 hours.
       }
 
       const urgencyScore = extractedLead.qualification_score ? Math.min(10, Math.max(1, Math.round(extractedLead.qualification_score / 10))) : 5;
-      
+
       let callOutcome = 'Prospective';
       if (duration < 10 || isFailed) {
         callOutcome = 'No Answer';
@@ -2949,10 +3019,10 @@ Please check the market and contact them within 5 hours.
 
       if ((isFailed || duration < 10) && phone) {
         console.log(`⚠️  Detected call failure/no-answer for ${phone} (Reason: ${endedReason}). Scheduling retries.`);
-        const leadMeta = { 
-          phone, 
-          name: call.customer?.name, 
-          id: leadId, 
+        const leadMeta = {
+          phone,
+          name: call.customer?.name,
+          id: leadId,
           email: metadata.email,
           property_interest: metadata.interest || '',
           budget: metadata.budget || ''
@@ -2960,36 +3030,198 @@ Please check the market and contact them within 5 hours.
         await scheduleRetry(leadMeta, triggerAICall, triggerFailoverMessages);
       }
 
-      // ── Schedule email follow-ups after call ends (Day 0 instant, 1, 2, 3)
+      // ── Schedule email follow-ups or send Booking Confirmation after call ends
       if (phone) {
-        const leadEmail = metadata.email || (leadId ? await getLeadEmail(leadId) : null);
-        const leadForFollowup = {
-          phone,
-          email: leadEmail || null,
-          name:  call.customer?.name || 'there',
-          property_interest: call.metadata?.interest || metadata.interest || '',
-          budget: call.metadata?.budget || metadata.budget || '',
-          id: leadId,
-        };
-        let followupProperties = [];
+        const leadEmail = extractedLead.email || metadata.email || (leadId ? await getLeadEmail(leadId) : null);
+        const isUnanswered = isFailed || duration < 10;
+        const outcome = isUnanswered ? 'NO ANSWER' : (aiIntelligence.outcome || 'FOLLOW UP');
+
+        // Lookup if they have an active confirmed visit in database
+        let activeVisit = null;
         try {
-          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
-          if (snap?.data?.pe_properties) {
-            followupProperties = typeof snap.data.pe_properties === 'string'
-              ? JSON.parse(snap.data.pe_properties)
-              : snap.data.pe_properties;
+          const { createClient } = require('@supabase/supabase-js');
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+          
+          let queryPhone = phone || call.customer?.number || '';
+          queryPhone = normalizePhone(queryPhone);
+          
+          const { data: vData } = await sb.from('visits')
+            .select('*')
+            .neq('status', 'cancelled')
+            .neq('status', 'rejected')
+            .or(`client_phone.eq.${queryPhone}${leadId ? `,lead_id.eq.${leadId}` : ''}`)
+            .order('created_at', { ascending: false })
+            .limit(1);
+            
+          if (vData && vData.length > 0) {
+            activeVisit = vData[0];
           }
-        } catch (e) { console.error('VAPI followup property fetch error:', e.message); }
-        await scheduleFollowUps(leadForFollowup, followupProperties);
+        } catch (e) {
+          console.error('Error looking up active visit in end-of-call followups:', e.message);
+        }
+
+        const isLeadBooked = outcome === 'BOOKED' || !!activeVisit;
+
+        if (isLeadBooked && leadEmail) {
+          console.log(`🏡 Lead accepted to visit. Sending confirmed booking email for ${activeVisit?.property_name || 'Property'} to ${leadEmail}`);
+          
+          let propertyAddress = 'Confirmed Property Location';
+          let propertyDetailsHtml = '';
+          const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
+          const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
+          const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+          const websiteUrl = process.env.BASE_URL || 'https://scaleover-lemon.vercel.app';
+          const propName = activeVisit?.property_name || extractedLead.property_interest || 'Premium Property';
+
+          // Try to look up address and property details
+          try {
+            const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+            if (snapshot && snapshot.data && snapshot.data.pe_properties) {
+              const properties = typeof snapshot.data.pe_properties === 'string'
+                ? JSON.parse(snapshot.data.pe_properties)
+                : snapshot.data.pe_properties;
+              const found = properties.find(p =>
+                p.name?.toLowerCase() === propName.toLowerCase() ||
+                p.id === activeVisit?.property_id
+              );
+              if (found) {
+                if (found.address) propertyAddress = found.address;
+                
+                const propLink = `${websiteUrl}/property.html?id=${found.id}`;
+                propertyDetailsHtml = `
+                  <!-- Property Info Section -->
+                  <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+                    <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">🏢 PROPERTY DETAILS</h3>
+                    <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:20px">
+                      <h4 style="margin:0 0 8px;color:#faf8f4;font-size:16px">${found.name}</h4>
+                      <p style="margin:0 0 12px;color:rgba(255,255,255,0.6);font-size:13px">${found.description || 'Premium residence in a premium community.'}</p>
+                      <table style="width:100%;font-size:13px;color:rgba(255,255,255,0.8)">
+                        <tr>
+                          <td style="padding:4px 0;color:rgba(255,255,255,0.4)">💰 Price:</td>
+                          <td style="padding:4px 0;font-weight:bold;color:#c5a059">${found.price || 'Contact for Price'}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:4px 0;color:rgba(255,255,255,0.4)">🛏️ BHK:</td>
+                          <td style="padding:4px 0;font-weight:bold">${found.bhk || found.bedrooms || 'N/A'}</td>
+                        </tr>
+                      </table>
+                      <div style="margin-top:16px">
+                        <a href="${propLink}" target="_blank" style="display:inline-block;background:transparent;border:1px solid #c5a059;color:#c5a059;padding:8px 18px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:600">View Property Photos & Details →</a>
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }
+            }
+          } catch (e) { console.error('Lookup address in end-of-call followups error:', e.message); }
+
+          const visitDateStr = activeVisit?.visit_date || 'To be confirmed';
+          const visitTimeStr = activeVisit?.visit_time || 'To be confirmed';
+          const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propertyAddress)}`;
+
+          await sendEmail({
+            to: leadEmail,
+            subject: `🏡 CONFIRMED: Your property viewing at ${propName}`,
+            message: `Hi ${extractedLead.name || 'there'},\n\nThank you for speaking with us! We have confirmed your showing itinerary.\n\nDate: ${visitDateStr}\nTime: ${visitTimeStr}\nProperty: ${propName}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nExplore more listings: ${websiteUrl}`,
+            html: `
+<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
+  <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
+    <h1 style="margin:0;color:#c5a059;font-size:24px;font-weight:300;letter-spacing:2px">🏡 VISIT CONFIRMED</h1>
+    <p style="margin:6px 0 0;color:rgba(255,255,255,0.6);font-size:14px">${agencyName} Elite Real Estate</p>
+  </div>
+  <div style="padding:32px;color:#faf8f4">
+    <p style="font-size:16px;line-height:1.6;color:rgba(255,255,255,0.85)">
+      Hi <strong>${extractedLead.name || 'there'}</strong>,
+    </p>
+    <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8)">
+      Thank you for speaking with us today! We are thrilled to confirm your private showing for the premium property <strong>${propName}</strong>. Please find your showing itinerary details below:
+    </p>
+
+    <!-- Details Box -->
+    <div style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:24px;margin:24px 0">
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);width:120px;font-weight:600">🏠 Property</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${propName}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">📅 Date</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visitDateStr}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">⏰ Time</td>
+          <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visitTimeStr}</td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;color:rgba(255,255,255,0.45);vertical-align:top;font-weight:600">📍 Location</td>
+          <td style="padding:8px 0;color:#faf8f4;line-height:1.4">
+            ${propertyAddress}<br>
+            <a href="${mapUrl}" target="_blank" style="display:inline-block;margin-top:6px;color:#c5a059;text-decoration:none;font-weight:600;font-size:12px">🗺️ Open in Google Maps →</a>
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    ${propertyDetailsHtml}
+
+    <!-- Agent Card -->
+    <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+      <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">📋 DEDICATED REAL ESTATE ADVISOR</h3>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div>
+          <div style="font-weight:bold;font-size:16px;color:#faf8f4">${agentName}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px">${agencyName} Elite Partner</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6">
+            📱 Phone: <strong>${agentPhone}</strong><br>
+            ✉️ Email: <strong>${AGENT_EMAIL}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Website CTA -->
+    <div style="text-align:center;margin-top:32px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.08)">
+      <a href="${websiteUrl}" target="_blank" style="background:#c5a059;color:#0a0e14;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;font-size:15px">Explore More Exclusive Listings →</a>
+      <p style="margin:12px 0 0;font-size:12px;color:rgba(255,255,255,0.45)">Visit our official website: <a href="${websiteUrl}" target="_blank" style="color:#c5a059">${websiteUrl}</a></p>
+    </div>
+
+    <div style="margin-top:32px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3)">
+      Please notify us at least 24 hours in advance if you need to reschedule.<br>
+      © ${new Date().getFullYear()} ${agencyName}. All rights reserved.
+    </div>
+  </div>
+</div>`
+          });
+        } else {
+          // Standard follow-ups for non-booked leads
+          const leadForFollowup = {
+            phone,
+            email: leadEmail || null,
+            name: call.customer?.name || 'there',
+            property_interest: call.metadata?.interest || metadata.interest || '',
+            budget: call.metadata?.budget || metadata.budget || '',
+            id: leadId,
+          };
+          let followupProperties = [];
+          try {
+            const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+            if (snap?.data?.pe_properties) {
+              followupProperties = typeof snap.data.pe_properties === 'string'
+                ? JSON.parse(snap.data.pe_properties)
+                : snap.data.pe_properties;
+            }
+          } catch (e) { console.error('VAPI followup property fetch error:', e.message); }
+          await scheduleFollowUps(leadForFollowup, followupProperties);
+        }
       }
 
       // ── Process Sequential Campaign Queue ──────────────────────────────────────
       try {
         const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
         if (snap && snap.data) {
-          let queue = typeof snap.data.pe_campaign_queue === 'string' 
-                        ? JSON.parse(snap.data.pe_campaign_queue) 
-                        : (snap.data.pe_campaign_queue || []);
+          let queue = typeof snap.data.pe_campaign_queue === 'string'
+            ? JSON.parse(snap.data.pe_campaign_queue)
+            : (snap.data.pe_campaign_queue || []);
           let status = snap.data.pe_campaign_status || 'IDLE';
 
           let stats = snap.data.pe_campaign_stats ? (typeof snap.data.pe_campaign_stats === 'string' ? JSON.parse(snap.data.pe_campaign_stats) : snap.data.pe_campaign_stats) : null;
@@ -3017,31 +3249,31 @@ Please check the market and contact them within 5 hours.
                 // First call: No Answer -> Wait 5 Minutes -> Retry
                 attempts[finalLeadId] = 1;
                 snap.data.pe_campaign_attempts = JSON.stringify(attempts);
-                
+
                 console.log(`⏳ Lead ${phone} did not answer. Scheduling 5-minute retry before moving to next lead.`);
-                
-                const leadToRetry = { 
+
+                const leadToRetry = {
                   id: finalLeadId,
-                  phone, 
-                  name: call.customer?.name || metadata.name || 'there', 
+                  phone,
+                  name: call.customer?.name || metadata.name || 'there',
                   email: metadata.email || '',
                   property_interest: metadata.interest || '',
                   budget: metadata.budget || ''
                 };
-                
+
                 setTimeout(() => {
                   triggerAICall(leadToRetry).catch(e => console.error('Campaign retry call failed:', e));
                 }, 5 * 60 * 1000); // 5 minutes
-                
+
               } else {
                 // Second call: No Answer -> Create Follow-Up Task, Notify Agent, Stop Calling
                 attempts[finalLeadId] = 2;
                 snap.data.pe_campaign_attempts = JSON.stringify(attempts);
                 stats.callsCompleted++;
                 stats.noAnswers++;
-                
+
                 console.log(`⛔ Lead ${phone} did not answer on 2nd attempt. Creating task and progressing to next lead.`);
-                
+
                 // Create follow up task
                 const { createClient } = require('@supabase/supabase-js');
                 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
@@ -3072,7 +3304,7 @@ Please check the market and contact them within 5 hours.
               if (outcome === 'BOOKED') stats.bookings++;
               else if (outcome === 'FOLLOW UP') stats.followUps++;
               else if (outcome === 'NOT INTERESTED') stats.notInterested++;
-              
+
               proceedToNext = true;
             }
 
@@ -3082,14 +3314,14 @@ Please check the market and contact them within 5 hours.
               if (queue.length > 0) {
                 const nextLeadId = queue.shift();
                 console.log(`🚀 Campaign moving to next lead in queue. ${queue.length} remaining.`);
-                
+
                 snap.data.pe_campaign_queue = JSON.stringify(queue);
-                
+
                 if (queue.length === 0) {
                   snap.data.pe_campaign_status = 'COMPLETED';
                   console.log('🏁 Campaign completed.');
                 }
-                
+
                 snap.markModified('data');
                 await snap.save();
 
@@ -3097,17 +3329,17 @@ Please check the market and contact them within 5 hours.
                 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
                 let { data: nextLeadData } = await sb.from('leads').select('*').eq('id', nextLeadId).single();
                 if (!nextLeadData) {
-                   let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
-                   nextLeadData = tLeadData;
+                  let { data: tLeadData } = await sb.from('team_leads').select('*').eq('id', nextLeadId).single();
+                  nextLeadData = tLeadData;
                 }
 
                 if (nextLeadData && nextLeadData.phone) {
-                   console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
-                   setTimeout(() => {
-                     triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
-                   }, 5000);
+                  console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
+                  setTimeout(() => {
+                    triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
+                  }, 5000);
                 } else {
-                   console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
+                  console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
                 }
               } else {
                 snap.data.pe_campaign_status = 'COMPLETED';
@@ -3133,8 +3365,17 @@ Please check the market and contact them within 5 hours.
       console.log(`📵 Lead hung up: ${phone}`);
     }
 
+    if (!res.headersSent) {
+      res.json({ success: true, message: "Webhook processed successfully" });
+    }
   } catch (err) {
     console.error('VAPI webhook processing error:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        reason: `VAPI webhook processing error: ${err.message}`
+      });
+    }
   }
 });
 
@@ -3178,7 +3419,7 @@ app.get('/api/followups', protect, async (req, res) => {
     // Run the passive drip engine to send any outstanding emails
     const followupService = require('../services/followup');
     await followupService.processFollowUpDrip();
-    
+
     const list = await followupService.getAllScheduled();
     res.json({ success: true, count: list.length, followups: list });
   } catch (err) {
@@ -3245,7 +3486,7 @@ app.post('/api/followups/manual', protect, async (req, res) => {
     const emailData = followupService.buildDay0Email(lead, properties);
     const { sendEmail } = require('../services/email');
     const result = await sendEmail({ to: lead.email, subject: emailData.subject, html: emailData.html, message: emailData.plain });
-    
+
     res.json({ success: result.success, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3296,7 +3537,7 @@ app.post('/api/followups/test', protect, async (req, res) => {
     const subject = `[TEST Drip Day ${day}] ` + emailData.subject;
     const { sendEmail } = require('../services/email');
     const result = await sendEmail({ to: targetEmail, subject, html: emailData.html, message: emailData.plain });
-    
+
     res.json({ success: result.success, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3398,10 +3639,10 @@ app.patch('/api/leads/:id/stage', protect, async (req, res) => {
       return res.status(400).json({ error: `Invalid stage. Must be one of: ${validStages.join(', ')}` });
     }
     const result = await updateLeadStage(req.params.id, stage);
-    
+
     // Sync to dashboard snapshot
     await syncLeadToSnapshot(AGENT_EMAIL, req.params.id, { pipeline_stage: stage, status: stage });
-    
+
     res.json({ success: result.success, stage });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -3532,9 +3773,9 @@ app.post('/api/leads/:id/takeover', protect, async (req, res) => {
 // ── AI SMS TOOL — For Vapi Function Calls ──────────────────────────────────
 app.post('/api/ai/sms', async (req, res) => {
   try {
-    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments 
-             || req.body.message?.functionCall?.parameters 
-             || req.body;
+    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments
+      || req.body.message?.functionCall?.parameters
+      || req.body;
 
     if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
 
@@ -3603,9 +3844,9 @@ app.post('/api/sms/blast', protect, async (req, res) => {
 // ── AI SMS TOOL — For Vapi Function Calls ──────────────────────────────────
 app.post('/api/ai/sms', async (req, res) => {
   try {
-    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments 
-             || req.body.message?.functionCall?.parameters 
-             || req.body;
+    const { phone, message } = req.body.message?.toolCalls?.[0]?.function?.arguments
+      || req.body.message?.functionCall?.parameters
+      || req.body;
 
     if (!phone || !message) return res.status(400).json({ error: 'phone and message required' });
 
@@ -3638,7 +3879,7 @@ app.post('/api/webhook/email-reply', async (req, res) => {
   try {
     const { from, subject, text, html } = req.body;
     const body = text || html || '';
-    
+
     if (!from || !body) {
       console.log('⚠️  Incomplete email payload received');
       return res.status(400).json({ error: 'from and body required' });
@@ -3658,8 +3899,8 @@ app.post('/api/webhook/email-reply', async (req, res) => {
     const sid = `email_${leadEmail}`;
     let session = conversationSessions[sid];
     if (!session) {
-      session = { 
-        history: [], 
+      session = {
+        history: [],
         leadData: lead,
         lastActive: Date.now()
       };
@@ -3674,9 +3915,9 @@ app.post('/api/webhook/email-reply', async (req, res) => {
 
     const systemPrompt = await buildPriyaPrompt(AGENT_EMAIL, 'EMAIL');
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ 
+    const model = genAI.getGenerativeModel({
       model: "gemini-3-flash-preview",
-      systemInstruction: systemPrompt 
+      systemInstruction: systemPrompt
     });
 
     const contents = session.history.map(h => ({ role: h.role, parts: h.parts }));
