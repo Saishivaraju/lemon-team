@@ -167,12 +167,30 @@ function calcQualificationScore(budget, bhkPref, preApproval) {
   return Math.min(100, Math.round(score * 0.8));
 }
 
-async function getLeadEmail(leadId) {
+async function getLeadEmail(leadId, phone) {
   try {
     const { createClient } = require('@supabase/supabase-js');
     const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    const { data } = await sb.from('leads').select('email').eq('id', leadId).single();
-    return data ? data.email : null;
+    
+    if (leadId) {
+      let { data } = await sb.from('leads').select('email').eq('id', leadId).single();
+      if (data && data.email) return data.email;
+
+      let { data: tData } = await sb.from('team_leads').select('email').eq('id', leadId).single();
+      if (tData && tData.email) return tData.email;
+    }
+
+    if (phone) {
+      const { normalizePhone } = require('../services/normalization');
+      const normPhone = normalizePhone(phone);
+      let { data } = await sb.from('leads').select('email').eq('phone', normPhone).single();
+      if (data && data.email) return data.email;
+
+      let { data: tData } = await sb.from('team_leads').select('email').eq('phone', normPhone).single();
+      if (tData && tData.email) return tData.email;
+    }
+
+    return null;
   } catch (e) {
     return null;
   }
@@ -185,7 +203,7 @@ async function triggerFailoverMessages(lead) {
   const leadName = name || 'there';
 
   // ── Resolve lead email ────────────────────────────────────────────────────
-  const leadEmail = leadEmailMeta || (leadId ? await getLeadEmail(leadId) : null);
+  const leadEmail = leadEmailMeta || await getLeadEmail(leadId, phone);
   if (!leadEmail) {
     console.warn(`⚠️  No email found for lead ${leadName} (${phone}) — skipping failover email`);
     return;
@@ -3087,7 +3105,7 @@ Please check the market and contact them within 5 hours.
 
       // ── Schedule email follow-ups or send Booking Confirmation after call ends
       if (phone) {
-        const leadEmail = extractedLead.email || metadata.email || (leadId ? await getLeadEmail(leadId) : null);
+        const leadEmail = extractedLead.email || metadata.email || await getLeadEmail(leadId, phone);
         const isUnanswered = isFailed || duration < 10;
         const outcome = isUnanswered ? 'NO ANSWER' : (aiIntelligence.outcome || 'FOLLOW UP');
 
@@ -3350,10 +3368,8 @@ Please check the market and contact them within 5 hours.
                   }).catch(e => console.error(`Email send exception:`, e.message));
                 }
 
-                // Schedule background retry call after 5 minutes
-                setTimeout(() => {
-                  triggerAICall(leadToRetry).catch(e => console.error('Campaign retry call failed:', e));
-                }, 5 * 60 * 1000); // 5 minutes
+                // Schedule background retry call after 5 minutes in MongoDB (Serverless-Safe)
+                await scheduleRetry(leadToRetry, triggerAICall, triggerFailoverMessages);
 
                 // Immediately progress to the next campaign lead
                 proceedToNext = true;
@@ -3428,9 +3444,8 @@ Please check the market and contact them within 5 hours.
 
                 if (nextLeadData && nextLeadData.phone) {
                   console.log(`📞 Triggering next campaign call for ${nextLeadData.name} (${nextLeadData.phone})...`);
-                  setTimeout(() => {
-                    triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
-                  }, 5000);
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  await triggerAICall(nextLeadData).catch(e => console.error('Campaign call failed:', e));
                 } else {
                   console.log(`⚠️ Could not find lead ${nextLeadId} to continue campaign.`);
                 }
