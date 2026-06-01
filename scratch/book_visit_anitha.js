@@ -3,7 +3,7 @@ const { sendEmail } = require('../services/email');
 
 const AGENT_EMAIL = process.env.AGENT_EMAIL || 'saishivaraju.m2002@gmail.com';
 const AGENT_NAME  = process.env.AGENT_NAME  || 'Sarah Al-Rashid';
-const BASE_URL    = process.env.BASE_URL    || 'https://real-estate-web-liard-rho.vercel.app';
+const BASE_URL    = process.env.BASE_URL    || 'https://scaleover-lemon.vercel.app';
 
 const visit = {
   client_name:   'Anitha',

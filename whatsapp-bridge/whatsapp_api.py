@@ -28,7 +28,7 @@ from datetime import datetime
 WA_BRIDGE_URL = os.environ.get('WA_BRIDGE_URL', 'http://localhost:3001')
 PYTHON_API_PORT = int(os.environ.get('WA_PYTHON_PORT', 3002))
 AGENT_NAME = os.environ.get('AGENT_NAME', 'PropEdge Team')
-VERCEL_URL = os.environ.get('PROPEDGE_BACKEND_URL', 'https://real-estate-web-liard-rho.vercel.app')
+VERCEL_URL = os.environ.get('PROPEDGE_BACKEND_URL', 'https://scaleover-lemon.vercel.app')
 
 app = Flask(__name__)
 

@@ -19,7 +19,7 @@ const AGENT_NAME   = process.env.AGENT_NAME   || 'Sarah Al-Rashid';
 const AGENT_EMAIL  = process.env.AGENT_EMAIL  || 'saishivaraju.m2002@gmail.com';
 const AGENT_PHONE  = process.env.AGENT_PHONE  || '+971 50 123 4567';
 const COMPANY_NAME = process.env.COMPANY_NAME || 'Zorvo Realty';
-const BASE_URL     = process.env.BASE_URL     || 'https://scaleover.vercel.app';
+const BASE_URL     = process.env.BASE_URL     || 'https://scaleover-lemon.vercel.app';
 
 // ── MongoDB Schema Definition ─────────────────────────────────────────────────
 const FollowUpSchema = new mongoose.Schema({

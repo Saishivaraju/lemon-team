@@ -138,7 +138,7 @@ client.on('message', async (msg) => {
 
   try {
     // 1. Forward to your Vercel backend AI
-    const BACKEND = process.env.BACKEND_URL || 'https://real-estate-web-liard-rho.vercel.app';
+    const BACKEND = process.env.BACKEND_URL || 'https://scaleover-lemon.vercel.app';
     const SECRET  = process.env.API_SECRET  || 'test';
     
     // Extract phone number from WhatsApp ID (e.g., "919999900000@c.us" -> "919999900000")

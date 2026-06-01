@@ -11,7 +11,7 @@ const VAPI_ASSISTANT_ID    = process.env.VAPI_ASSISTANT_ID;
 const VAPI_PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID;
 const AGENT_NAME           = process.env.AGENT_NAME    || 'Sarah Al-Rashid';
 const COMPANY_NAME         = process.env.COMPANY_NAME  || 'Zorvo Realty';
-const BASE_URL             = process.env.BASE_URL       || 'https://real-estate-web-liard-rho.vercel.app';
+const BASE_URL             = process.env.BASE_URL       || 'https://scaleover-lemon.vercel.app';
 
 // ── Make outbound call via VAPI ───────────────────────────────────────────────
 async function makeOutboundCall(lead, properties = []) {

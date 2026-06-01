@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 
 // ── YOUR VERCEL URL ── UPDATE THIS ──────────────
-const BACKEND_URL = 'https://real-estate-web-liard-rho.vercel.app';
+const BACKEND_URL = 'https://scaleover-lemon.vercel.app';
 // ─────────────────────────────────────────────────
 
 export default function App() {
