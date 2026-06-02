@@ -4687,6 +4687,73 @@
         box-shadow: 0 0 0 0 rgba(180, 40, 40, 0);
       }
     }
+    /* Settings Elite Redesign */
+    .settings-layout {
+      display: flex;
+      gap: 30px;
+      margin-top: 10px;
+      align-items: flex-start;
+    }
+    .settings-nav {
+      flex: 0 0 250px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .s-nav-item {
+      padding: 14px 18px;
+      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s;
+    }
+    .s-nav-item i {
+      font-size: 16px;
+      width: 20px;
+      text-align: center;
+    }
+    .s-nav-item:hover {
+      background: rgba(255,255,255,0.03);
+      color: var(--text);
+    }
+    .s-nav-item.active {
+      background: var(--accent);
+      color: #000;
+    }
+    .settings-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .s-tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .s-tab-pane.active {
+      display: flex;
+    }
+    @media (max-width: 900px) {
+      .settings-layout {
+        flex-direction: column;
+        gap: 20px;
+      }
+      .settings-nav {
+        flex: none;
+        flex-direction: row;
+        width: 100%;
+        overflow-x: auto;
+        white-space: nowrap;
+        padding-bottom: 5px;
+      }
+      .s-nav-item {
+        flex: 0 0 auto;
+      }
+    }
   </style>
 </head>
 
@@ -5760,124 +5827,130 @@
         </div>
 
 
-        <div class="settings-grid">
-          <!-- PROFILE IDENTITY -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-user-circle"></i> Profile Identity</div>
-            </div>
-            <div class="card-body">
-              <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-                <div class="agent-avatar" id="s-avatar"
-                  style="width:56px;height:56px;font-size:18px; border:2px solid var(--accent); overflow:hidden; background-size:cover; background-position:center">
-                  SA</div>
-                <input type="file" id="s-photo-input" style="display:none" accept="image/*"
-                  onchange="handlePhotoUpload(this)">
-                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('s-photo-input').click()">Change
-                  Identity Photo</button>
-              </div>
-              <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="s-name">
-              </div>
-              <div class="form-group"><label class="form-label">Primary Email</label><input class="form-input"
-                  id="s-email"></div>
-              <div class="form-group"><label class="form-label">Direct Phone</label><input class="form-input"
-                  id="s-phone"></div>
-              <div class="form-group"><label class="form-label">License ID</label><input class="form-input"
-                  id="s-license"></div>
-            </div>
+        <div class="settings-layout">
+          <!-- Left Nav -->
+          <div class="settings-nav">
+            <div class="s-nav-item active" onclick="switchSettingsTab('brand', this)"><i class="fas fa-user-circle"></i> Brand & Identity</div>
+            <div class="s-nav-item" onclick="switchSettingsTab('ai', this)"><i class="fas fa-robot"></i> AI & Lead Routing</div>
+            <div class="s-nav-item" onclick="switchSettingsTab('integrations', this)"><i class="fas fa-plug"></i> Integrations Hub</div>
+            <div class="s-nav-item" onclick="switchSettingsTab('security', this)"><i class="fas fa-lock"></i> Security & Access</div>
           </div>
 
-          <!-- SOCIAL MEDIA PROFILES -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-share-nodes"></i> Social Media Profiles</div>
-            </div>
-            <div class="card-body">
-              <div class="form-group"><label class="form-label"><i class="fab fa-instagram"></i> Instagram URL</label><input class="form-input" id="s-social-ig" placeholder="https://instagram.com/..."></div>
-              <div class="form-group"><label class="form-label"><i class="fab fa-facebook-f"></i> Facebook URL</label><input class="form-input" id="s-social-fb" placeholder="https://facebook.com/..."></div>
-              <div class="form-group"><label class="form-label"><i class="fab fa-linkedin-in"></i> LinkedIn URL</label><input class="form-input" id="s-social-li" placeholder="https://linkedin.com/in/..."></div>
-              <div class="form-group"><label class="form-label"><i class="fab fa-x-twitter"></i> Twitter/X URL</label><input class="form-input" id="s-social-tw" placeholder="https://x.com/..."></div>
-              <div style="font-size:11px; color:var(--muted); margin-top:6px">These links will appear in the footer of your public website.</div>
-            </div>
-          </div>
-
-          <!-- CONNECTIVITY HUB -->
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title"><i class="fas fa-plug"></i> Connectivity Hub</div>
-            </div>
-            <div class="card-body">
-              <div class="conn-item">
-                <div style="display:flex; align-items:center; gap:10px">
-                  <i class="fas fa-envelope" style="color:var(--accent)"></i>
-                  <div style="font-size:12px; font-weight:700">Resend Email API</div>
+          <!-- Right Content -->
+          <div class="settings-content">
+            <!-- BRAND TAB -->
+            <div class="s-tab-pane active" id="s-tab-brand">
+              <div class="card">
+                <div class="card-header"><div class="card-title">Profile Identity</div></div>
+                <div class="card-body">
+                  <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+                    <div class="agent-avatar" id="s-avatar" style="width:64px;height:64px;font-size:22px; border:2px solid var(--accent); overflow:hidden; background-size:cover; background-position:center; display:flex; align-items:center; justify-content:center; border-radius:50%">SA</div>
+                    <input type="file" id="s-photo-input" style="display:none" accept="image/*" onchange="handlePhotoUpload(this)">
+                    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('s-photo-input').click()">Upload New Photo</button>
+                  </div>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                    <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="s-name"></div>
+                    <div class="form-group"><label class="form-label">License ID</label><input class="form-input" id="s-license"></div>
+                    <div class="form-group"><label class="form-label">Primary Email</label><input class="form-input" id="s-email"></div>
+                    <div class="form-group"><label class="form-label">Direct Phone</label><input class="form-input" id="s-phone"></div>
+                  </div>
+                  <div class="form-group" style="margin-top:16px"><label class="form-label">Agent Bio (Used by AI for context)</label><textarea class="form-input" id="s-bio" rows="3" placeholder="I am an expert in luxury real estate..."></textarea></div>
                 </div>
-                <div class="conn-status status-active">Active</div>
               </div>
-              <div class="conn-item">
-                <div style="display:flex; align-items:center; gap:10px">
-                  <i class="fas fa-microphone" style="color:var(--accent)"></i>
-                  <div style="font-size:12px; font-weight:700">VAPI Voice Agent</div>
-                </div>
-                <div class="conn-status status-active">Active</div>
-              </div>
-              <div class="conn-item">
-                <div style="display:flex; align-items:center; gap:10px">
-                  <i class="fas fa-database" style="color:var(--blue)"></i>
-                  <div style="font-size:12px; font-weight:700">Supabase DB</div>
-                </div>
-                <div class="conn-status status-inactive">Standby</div>
-              </div>
-              <button class="btn btn-ghost btn-sm" style="width:100%; margin-top:10px"><i class="fas fa-key"></i> Manage
-                API Vault</button>
-            </div>
-          </div>
-
-
-        </div>
-        <!-- Website Access Credentials -->
-        <div class="card" style="margin-top:16px;border-color:rgba(240,192,64,.2)">
-          <div class="card-header" style="border-bottom-color:rgba(240,192,64,.15)">
-            <div class="card-title"><i class="fas fa-lock"></i> Website Agent Access</div>
-            <span style="font-size:12px;color:var(--muted)">Login credentials for the public website footer
-              button</span>
-          </div>
-          <div class="card-body">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;align-items:flex-end">
-              <div class="form-group" style="margin:0"><label class="form-label">Username</label><input
-                  class="form-input" id="s-acc-user" placeholder="sarah@propedge.ae"></div>
-              <div class="form-group" style="margin:0"><label class="form-label">Password</label><input
-                  class="form-input" id="s-acc-pass" type="password" placeholder="Set a password"></div>
-              <button class="btn btn-primary" onclick="saveAccessCredentials()">Save Credentials</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- ACCOUNT INTEGRATIONS -->
-        <div class="card" style="margin-top:16px">
-          <div class="card-header">
-            <div class="card-title"> Account Integrations & Automation</div> <span class="badge badge-confirmed">Premium
-              Suite</span>
-          </div>
-          <div class="card-body">
-            <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Connect your favorite tools to automate
-              lead follow-ups and meeting scheduling.</div>
-            <div class="int-grid">
-              <div class="int-card" onclick="toast('Email Integration Active')">
-                <div class="int-icon" style="color:var(--accent)"><i class="fas fa-envelope"></i></div>
-                <div class="int-info">
-                  <div class="int-nm">Resend Email API</div>
-                  <div class="int-st">Connected</div>
+              <div class="card">
+                <div class="card-header"><div class="card-title">Social Links</div></div>
+                <div class="card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                  <div class="form-group"><label class="form-label"><i class="fab fa-instagram"></i> Instagram</label><input class="form-input" id="s-social-ig"></div>
+                  <div class="form-group"><label class="form-label"><i class="fab fa-linkedin-in"></i> LinkedIn</label><input class="form-input" id="s-social-li"></div>
+                  <div class="form-group"><label class="form-label"><i class="fab fa-x-twitter"></i> Twitter/X</label><input class="form-input" id="s-social-tw"></div>
+                  <div class="form-group"><label class="form-label"><i class="fab fa-facebook-f"></i> Facebook</label><input class="form-input" id="s-social-fb"></div>
                 </div>
               </div>
             </div>
-            <div
-              style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);display:flex;gap:20px;flex-wrap:wrap">
-              <label class="check-wrap"><input type="checkbox" id="opt-email" checked onchange="saveOptions()"> <i
-                  class="fas fa-envelope"></i> Email Alerts</label>
-              <label class="check-wrap"><input type="checkbox" id="opt-auto" checked onchange="saveOptions()"> <i
-                  class="fas fa-robot"></i> AI Automation Active</label>
+
+            <!-- AI TAB -->
+            <div class="s-tab-pane" id="s-tab-ai">
+              <div class="card">
+                <div class="card-header"><div class="card-title">Zorvo AI Preferences</div></div>
+                <div class="card-body">
+                  <div class="form-group">
+                    <label class="form-label">AI Voice Tone</label>
+                    <select class="form-input" id="s-ai-tone">
+                      <option value="professional">Professional & Formal</option>
+                      <option value="friendly">Friendly & Energetic</option>
+                      <option value="luxury">Luxury & Exclusive</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Working Hours (AI Hand-off)</label>
+                    <div style="display:flex;gap:10px;align-items:center">
+                      <input type="time" class="form-input" id="s-ai-start" value="09:00"> <span style="color:var(--muted)">to</span> <input type="time" class="form-input" id="s-ai-end" value="18:00">
+                    </div>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;padding:15px;background:rgba(255,255,255,0.03);border-radius:8px;border:1px solid var(--border);margin-top:16px">
+                    <div>
+                      <div style="font-weight:700;font-size:14px;color:var(--text)">Auto-Engage New Leads</div>
+                      <div style="font-size:12px;color:var(--muted)">Zorvo will immediately call or text new leads.</div>
+                    </div>
+                    <label class="switch">
+                      <input type="checkbox" id="s-ai-auto" checked>
+                      <span class="slider round"></span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- INTEGRATIONS TAB -->
+            <div class="s-tab-pane" id="s-tab-integrations">
+              <div class="card">
+                <div class="card-header"><div class="card-title">Active Integrations</div></div>
+                <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
+                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
+                    <div style="display:flex; align-items:center; gap:16px">
+                      <i class="fas fa-microphone" style="color:var(--accent);font-size:24px;width:30px;text-align:center"></i>
+                      <div><div style="font-size:15px; font-weight:700">VAPI Voice Agent</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Handles inbound/outbound calls</div></div>
+                    </div>
+                    <div class="conn-status status-active">Connected</div>
+                  </div>
+                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
+                    <div style="display:flex; align-items:center; gap:16px">
+                      <i class="fas fa-envelope" style="color:var(--blue);font-size:24px;width:30px;text-align:center"></i>
+                      <div><div style="font-size:15px; font-weight:700">Resend Email API</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Drip campaigns & notifications</div></div>
+                    </div>
+                    <div class="conn-status status-active">Connected</div>
+                  </div>
+                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
+                    <div style="display:flex; align-items:center; gap:16px">
+                      <i class="fab fa-whatsapp" style="color:var(--green);font-size:26px;width:30px;text-align:center"></i>
+                      <div><div style="font-size:15px; font-weight:700">WhatsApp Business</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Instant client messaging</div></div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" onclick="toast('WhatsApp API integration opening...')">Connect</button>
+                  </div>
+                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
+                    <div style="display:flex; align-items:center; gap:16px">
+                      <i class="fab fa-google" style="color:#DB4437;font-size:22px;width:30px;text-align:center"></i>
+                      <div><div style="font-size:15px; font-weight:700">Google Calendar</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Sync property visits</div></div>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" onclick="toast('Connecting Google Calendar...')">Connect</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECURITY TAB -->
+            <div class="s-tab-pane" id="s-tab-security">
+              <div class="card">
+                <div class="card-header"><div class="card-title">Website Access</div></div>
+                <div class="card-body">
+                  <div style="font-size:13px;color:var(--muted);margin-bottom:16px">These credentials are used by you or your clients to access the public agent portal footer button.</div>
+                  <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="s-acc-user" placeholder="agent@zorvo.com"></div>
+                  <div class="form-group"><label class="form-label">Password</label><input class="form-input" type="password" id="s-acc-pass" placeholder="••••••••"></div>
+                  <button class="btn btn-primary" onclick="saveAccessCredentials()">Update Credentials</button>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -10429,10 +10502,16 @@ ${date}`;
     // ================================================================
     function renderSettings() {
       const a = state.agent; if (!a) return;
-      const fields = { name: 's-name', email: 's-email', phone: 's-phone', license_number: 's-license', social_instagram: 's-social-ig', social_facebook: 's-social-fb', social_linkedin: 's-social-li', social_twitter: 's-social-tw' };
+      const fields = { name: 's-name', email: 's-email', phone: 's-phone', license_number: 's-license', bio: 's-bio', social_instagram: 's-social-ig', social_facebook: 's-social-fb', social_linkedin: 's-social-li', social_twitter: 's-social-tw' };
       Object.entries(fields).forEach(([key, id]) => { const el = document.getElementById(id); if (el) el.value = a[key] || ''; });
       const sp = document.getElementById('s-plan'); if (sp) sp.value = a.plan || 'Pro Plan';
       const so = document.getElementById('s-use-ollama'); if (so) so.checked = a.use_ollama !== false; // Default to true
+
+      const opts = state.options || {};
+      const aiTone = document.getElementById('s-ai-tone'); if(aiTone) aiTone.value = opts.tone || 'professional';
+      const aiStart = document.getElementById('s-ai-start'); if(aiStart) aiStart.value = opts.startHour || '09:00';
+      const aiEnd = document.getElementById('s-ai-end'); if(aiEnd) aiEnd.value = opts.endHour || '18:00';
+      const aiAuto = document.getElementById('s-ai-auto'); if(aiAuto) aiAuto.checked = opts.autoEngage !== false;
 
       // Load access credentials
       const creds = DB.get('pe_access') || { username: a.email || 'saishivaraju.m2002@gmail.com', password: 'propedge123' };
@@ -10463,6 +10542,18 @@ ${date}`;
       toast(`Brand color updated to ${color}`);
     }
 
+    function switchSettingsTab(tabId, el) {
+      document.querySelectorAll('.s-nav-item').forEach(e => e.classList.remove('active'));
+      document.querySelectorAll('.s-tab-pane').forEach(e => e.classList.remove('active'));
+      if(el) el.classList.add('active');
+      else {
+        const fallback = document.querySelector(`.s-nav-item[onclick*="${tabId}"]`);
+        if(fallback) fallback.classList.add('active');
+      }
+      const target = document.getElementById('s-tab-' + tabId);
+      if(target) target.classList.add('active');
+    }
+
     function saveSettings() {
       const a = {
         ...state.agent,
@@ -10470,13 +10561,25 @@ ${date}`;
         email: document.getElementById('s-email').value,
         phone: document.getElementById('s-phone').value,
         license_number: document.getElementById('s-license').value,
+        bio: document.getElementById('s-bio').value,
         social_instagram: document.getElementById('s-social-ig').value,
         social_facebook: document.getElementById('s-social-fb').value,
         social_linkedin: document.getElementById('s-social-li').value,
         social_twitter: document.getElementById('s-social-tw').value
       };
+      
+      const aiOpts = {
+        tone: document.getElementById('s-ai-tone').value,
+        startHour: document.getElementById('s-ai-start').value,
+        endHour: document.getElementById('s-ai-end').value,
+        autoEngage: document.getElementById('s-ai-auto').checked
+      };
+
       DB.set(DB.AGENT, a);
       state.agent = a;
+      state.options = { ...state.options, ...aiOpts };
+      DB.set('pe_opts', state.options);
+      
       syncToDB();
       renderAgent(); initAIBroker(); renderTeam();
       toast('Agency settings synchronized successfully. 🧠');
