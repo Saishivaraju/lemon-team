@@ -19,6 +19,7 @@ const OUTCOMES = {
   CALLBACK_REQUESTED: 'callback_requested',
   BOOKED:             'booked',
   TRANSFERRED:        'transferred',
+  TRANSFER_FAILED_AGENT_BUSY: 'transfer_failed_agent_busy',
 };
 
 // ── VAPI endedReason → base outcome (before AI intent override) ───────────────
@@ -52,6 +53,7 @@ const RETRY_POLICY = {
   [OUTCOMES.CALLBACK_REQUESTED]: { shouldRetry: false, retryDelayMinutes: 0,  finalRetryDelayMinutes: 0,  maxAttempts: 0 },
   [OUTCOMES.BOOKED]:             { shouldRetry: false, retryDelayMinutes: 0,  finalRetryDelayMinutes: 0,  maxAttempts: 0 },
   [OUTCOMES.TRANSFERRED]:        { shouldRetry: false, retryDelayMinutes: 0,  finalRetryDelayMinutes: 0,  maxAttempts: 0 },
+  [OUTCOMES.TRANSFER_FAILED_AGENT_BUSY]: { shouldRetry: false, retryDelayMinutes: 0,  finalRetryDelayMinutes: 0,  maxAttempts: 0 },
 };
 
 // ── Phone-number-not-found should never be retried ────────────────────────────
@@ -164,6 +166,7 @@ function buildCallResult({
     [OUTCOMES.CALLBACK_REQUESTED]: 'follow_up',
     [OUTCOMES.BOOKED]:             'book_visit',
     [OUTCOMES.TRANSFERRED]:        'transfer',
+    [OUTCOMES.TRANSFER_FAILED_AGENT_BUSY]: 'follow_up',
   };
 
   return {

@@ -1856,33 +1856,26 @@ app.post('/api/leads', async (req, res) => {
       // If teamId provided, assign to agent first (team mode)
       const teamId = req.body.teamId || null;
       if (teamId) {
-        try {
-          const { assignLeadToAgent, saveTeamLead } = require('../services/team');
-          const agent = await assignLeadToAgent(lead, teamId);
+        const { assignLeadToAgent, saveTeamLead } = require('../services/team');
+        assignLeadToAgent(lead, teamId).then(agent => {
           if (agent) {
             lead.id = null; // will be set after saveTeamLead
             lead.agent_id = agent.id;
             lead.team_id = teamId;
             lead.assigned_agent_name = agent.name;
             lead.assigned_agent_phone = agent.phone;
-            const saved = await saveTeamLead(lead, agent.id, teamId);
-            lead.id = saved.data?.id || null;
+            saveTeamLead(lead, agent.id, teamId).then(saved => {
+              lead.id = saved.data?.id || null;
+            });
           }
-        } catch (e) {
-          console.error('Team assign error:', e.message);
-        }
+        }).catch(e => console.error('Team assign error:', e.message));
       }
 
-      try {
-        const aiResult = await triggerAICall(lead);
-        if (aiResult.success) {
+      triggerAICall(lead).then(result => {
+        if (result.success) {
           console.log(`⚡ Instant AI call fired for ${lead.name} (${lead.phone})`);
-        } else {
-          console.error(`❌ Instant AI call failed: ${aiResult.error}`);
         }
-      } catch (e) {
-        console.error('AI trigger error:', e.message);
-      }
+      });
 
       // 📱 NEW: Cloud Mailbox for Laptop-Free AI
       pendingLeads.push(lead);
@@ -1966,10 +1959,6 @@ app.post('/api/leads/:id/trigger-call', async (req, res) => {
 
     console.log(`🚀 Manually triggering AI call for ${lead.name} (${lead.phone})`);
     const data = await triggerAICall(lead);
-
-    if (!data.success) {
-      return res.status(400).json({ success: false, error: data.error || 'Failed to trigger call via Vapi.' });
-    }
 
     res.json({ success: true, data });
   } catch (err) {
@@ -2906,109 +2895,6 @@ Please check the market and contact them within 5 hours.
         });
       }
 
-      // ── send_property_link — AI sends property link via sms ────────────
-      if (fnName === 'send_property_link') {
-        const { property_name } = fnArgs;
-        console.log(`[TOOL] send_property_link → property: ${property_name} to ${phone}`);
-        
-        try {
-          let propId = '';
-          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
-          if (snap?.data?.pe_properties) {
-            const props = typeof snap.data.pe_properties === 'string' ? JSON.parse(snap.data.pe_properties) : snap.data.pe_properties;
-            const p = props.find(x => x.name.toLowerCase().includes((property_name || '').toLowerCase()));
-            if (p) propId = p.id;
-          }
-          const link = `${process.env.BASE_URL}/property.html?id=${propId}`;
-          if (phone) await sendSMSText(phone, `Hi, here is the information for ${property_name} you requested: ${link}`);
-          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, { property_link_sent: true });
-        } catch(e) {
-          console.error('[TOOL] send_property_link error:', e.message);
-        }
-
-        return res.json({
-          results: [{ toolCallId: toolCallId, result: 'Property link sent successfully. Inform the user.' }],
-          success: true
-        });
-      }
-
-      // ── send_booking_link — AI sends booking page link ────────────
-      if (fnName === 'send_booking_link') {
-        console.log(`[TOOL] send_booking_link → to ${phone}`);
-        
-        try {
-          const link = process.env.BASE_URL;
-          if (phone) await sendSMSText(phone, `Hi, you can book your property visit here: ${link}`);
-          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, { booking_link_sent: true });
-        } catch(e) {
-          console.error('[TOOL] send_booking_link error:', e.message);
-        }
-
-        return res.json({
-          results: [{ toolCallId: toolCallId, result: 'Booking link sent successfully. Inform the user.' }],
-          success: true
-        });
-      }
-
-      // ── handle_failed_transfer — AI handles a failed transfer ────────────
-      if (fnName === 'handle_failed_transfer') {
-        const { property_name } = fnArgs;
-        console.log(`[TOOL] handle_failed_transfer → lead: ${phone}`);
-        
-        try {
-          // Send Full Lead Summary to Agent
-          let emailHtml = `<div style="font-family:Arial,sans-serif;max-width:600px;background:#0a0e14;color:#faf8f4;padding:24px;border-radius:8px;border:2px solid #e07830">
-            <h2 style="color:#e07830;margin:0 0 16px">Transfer Failed: Agent Unavailable</h2>
-            <p>A lead accepted a transfer, but you were unavailable. They were informed you will follow up today.</p>
-            <table style="width:100%;border-collapse:collapse">
-              <tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Lead Phone:</td><td style="padding:8px 0;color:#faf8f4;font-weight:bold">${phone}</td></tr>
-              <tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Property:</td><td style="padding:8px 0;color:#faf8f4">${property_name || 'N/A'}</td></tr>
-            </table>
-            <p style="margin-top:16px;color:#e07830;font-weight:bold">Please call them back TODAY.</p>
-          </div>`;
-          
-          await sendEmail({
-            to: AGENT_EMAIL,
-            subject: `🔥 HIGH PRIORITY: Missed Transfer from Lead ${phone}`,
-            message: `A transfer failed. Please call back ${phone} today regarding ${property_name || 'properties'}.`,
-            html: emailHtml
-          });
-
-          // Send Links to Lead
-          let propId = '';
-          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
-          if (snap?.data?.pe_properties) {
-            const props = typeof snap.data.pe_properties === 'string' ? JSON.parse(snap.data.pe_properties) : snap.data.pe_properties;
-            const p = props.find(x => x.name.toLowerCase().includes((property_name || '').toLowerCase()));
-            if (p) propId = p.id;
-          }
-          const pLink = `${process.env.BASE_URL}/property.html?id=${propId}`;
-          const bLink = process.env.BASE_URL;
-          
-          if (phone) {
-             await sendSMSText(phone, `Hi, this is ${AGENT_NAME}. Sorry I missed your call just now! Here are the details for ${property_name || 'the property'}: ${pLink}\n\nYou can also book a visit here: ${bLink}`);
-          }
-          
-          // Update Dashboard Status
-          if (leadId) {
-            await syncLeadToSnapshot(AGENT_EMAIL, leadId, { 
-              status: 'TRANSFER_FAILED_AGENT_BUSY',
-              next_action: 'follow_up',
-              property_link_sent: true,
-              booking_link_sent: true,
-              lead_score: 'HOT'
-            });
-          }
-        } catch(e) {
-          console.error('[TOOL] handle_failed_transfer error:', e.message);
-        }
-
-        return res.json({
-          results: [{ toolCallId: toolCallId, result: 'Agent notified and links sent. Please end the call normally after speaking your fallback message.' }],
-          success: true
-        });
-      }
-
       // ── update_lead_status — AI explicitly marks lead interest mid-call ────
       if (fnName === 'update_lead_status') {
         const { status: leadStatus, callback_time, reason: statusReason } = fnArgs;
@@ -3669,6 +3555,7 @@ Please check the market and contact them within 5 hours.
           } catch (e) { console.error('VAPI followup property fetch error:', e.message); }
           await scheduleFollowUps(leadForFollowup, followupProperties);
         }
+      }
 
 
       // 8. Per-outcome switch — handle each outcome specifically
@@ -3832,8 +3719,6 @@ Please check the market and contact them within 5 hours.
       } catch (queueErr) {
         console.error('[CAMPAIGN] ❌ Error processing campaign queue:', queueErr.message);
       }
-
-    }
 
     // ── hang — lead disconnected mid-call ──────────────────────────────────
     // NOTE: end-of-call-report fires next with full outcome data. We only log here.

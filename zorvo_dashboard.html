@@ -4796,16 +4796,32 @@
 
       <div class="hud-metrics">
         <div class="hud-item hud-card">
-          <div class="hud-label">Revenue</div>
-          <div class="hud-val" id="hud-rev">$0</div>
+          <div class="hud-label">HOT Leads</div>
+          <div class="hud-val" id="hud-hot-leads">0</div>
         </div>
         <div class="hud-item hud-card">
-          <div class="hud-label">Active</div>
-          <div class="hud-val" id="hud-hot">0</div>
+          <div class="hud-label">WARM Leads</div>
+          <div class="hud-val" id="hud-warm-leads">0</div>
         </div>
         <div class="hud-item hud-card">
-          <div class="hud-label">Tours</div>
-          <div class="hud-val" id="hud-visits">0</div>
+          <div class="hud-label">COLD Leads</div>
+          <div class="hud-val" id="hud-cold-leads">0</div>
+        </div>
+        <div class="hud-item hud-card">
+          <div class="hud-label">Transferred</div>
+          <div class="hud-val" id="hud-transferred">0</div>
+        </div>
+        <div class="hud-item hud-card">
+          <div class="hud-label">Booking Links</div>
+          <div class="hud-val" id="hud-booking-links">0</div>
+        </div>
+        <div class="hud-item hud-card">
+          <div class="hud-label">Follow-ups</div>
+          <div class="hud-val" id="hud-follow-ups">0</div>
+        </div>
+        <div class="hud-item hud-card">
+          <div class="hud-label">Callbacks</div>
+          <div class="hud-val" id="hud-callbacks">0</div>
         </div>
       </div>
 
@@ -7142,9 +7158,21 @@
       }
 
       // 4. Update HUD
-      if (document.getElementById('hud-rev')) document.getElementById('hud-rev').textContent = '$' + fmtNum(totalRev);
-      if (document.getElementById('hud-hot')) document.getElementById('hud-hot').textContent = state.leads.filter(l => l.score >= 80).length;
-      if (document.getElementById('hud-visits')) document.getElementById('hud-visits').textContent = state.bookings.filter(b => b.visit_date === today).length;
+      const hotCount = state.leads.filter(l => l.score >= 80 || (l.lead_score && l.lead_score.toUpperCase() === 'HOT')).length;
+      const warmCount = state.leads.filter(l => (l.score >= 50 && l.score < 80) || (l.lead_score && l.lead_score.toUpperCase() === 'WARM')).length;
+      const coldCount = state.leads.filter(l => l.score < 50 || (l.lead_score && l.lead_score.toUpperCase() === 'COLD')).length;
+      const transCount = state.leads.filter(l => (l.status || '').toLowerCase() === 'transferred').length;
+      const bookingLinkCount = state.leads.filter(l => l.booking_link_sent).length;
+      const followUpCount = state.leads.filter(l => (l.next_action || '').toLowerCase() === 'follow_up').length;
+      const callbackCount = state.leads.filter(l => (l.status || '').toLowerCase() === 'callback_requested' || l.callback_time).length;
+
+      if (document.getElementById('hud-hot-leads')) document.getElementById('hud-hot-leads').textContent = hotCount;
+      if (document.getElementById('hud-warm-leads')) document.getElementById('hud-warm-leads').textContent = warmCount;
+      if (document.getElementById('hud-cold-leads')) document.getElementById('hud-cold-leads').textContent = coldCount;
+      if (document.getElementById('hud-transferred')) document.getElementById('hud-transferred').textContent = transCount;
+      if (document.getElementById('hud-booking-links')) document.getElementById('hud-booking-links').textContent = bookingLinkCount;
+      if (document.getElementById('hud-follow-ups')) document.getElementById('hud-follow-ups').textContent = followUpCount;
+      if (document.getElementById('hud-callbacks')) document.getElementById('hud-callbacks').textContent = callbackCount;
     }
 
 

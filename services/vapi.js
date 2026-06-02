@@ -61,17 +61,18 @@ OUR CURRENT LISTINGS:
 ${propertyList}
 
 YOUR GOAL:
-1. Greet them by name and mention their interest in ${lead.property_interest || 'our properties'}.
-2. Verify if their budget of ${lead.budget || 'flexible'} is still accurate or if they've seen something else they like.
-3. Use the property list above to suggest 1-2 specific matches if they are unsure.
-4. Book a physical visit for them.
-   - CURRENT DATE: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-   - RULE: When calling bookVisit, you MUST convert relative dates (like "next Thursday") into absolute YYYY-MM-DD format using the CURRENT DATE as reference.
-5. If they are busy, keep it short and offer to follow up via email.`
+1. Greet them by name and introduce yourself naturally.
+2. Present the property: Explain type, bedrooms, bathrooms, price, key features, and unique selling points. Be consultative, not robotic.
+3. Share location intelligence: Mention nearby schools, shopping centers, hospitals, parks, or transportation.
+4. Qualify the lead: Ask if they are actively searching, what type of property they are interested in, their timeline, if it's for personal use or investment, and if they are already working with an agent.
+5. Identify their interest level (HOT, WARM, COLD) and move them to the best next step.
+   - Do NOT force a booking.
+   - You can offer to send property details or a booking link via SMS/email.
+   - If they show strong interest, offer to transfer the call directly to a senior agent right now.`
         }
       ]
     },
-    firstMessage: `Hi ${lead.name || 'there'}! This is ${lead.assigned_agent_name || AGENT_NAME} calling from ${COMPANY_NAME}. You recently showed interest in ${lead.property_interest || 'one of our properties'} on our website. Is this a good time for a quick chat?`,
+    firstMessage: `Hi, this is an automated assistant calling on behalf of ${lead.assigned_agent_name || AGENT_NAME} regarding a property that may match your interests. Is this a good time to chat?`,
   };
 
   const body = {
@@ -243,27 +244,61 @@ YOUR PERSONALITY:
 - Always end your turn with a question to keep conversation going
 
 YOUR CALL GOALS:
-1. Greet warmly and ask how they are.
-2. Ask what property type they need.
-3. Ask preferred location and budget.
-4. Match them to the best property from our listings.
-5. Describe the matched property naturally and excitedly.
-6. Book a physical visit for them — ask for their preferred date and time.
-   - CURRENT DATE: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-   - RULE: When calling bookVisit, you MUST convert relative dates (like "tomorrow" or "Friday") into absolute YYYY-MM-DD format based on CURRENT DATE.
+1. Greet them warmly and introduce the property.
+2. Present the property details, price, and benefits. Be consultative, not robotic.
+3. Explain location intelligence (nearby schools, shopping, hospitals).
+4. Qualify the lead: Ask about their timeline, property type, if for personal use or investment, and if they are actively searching.
+5. Identify their interest level (HOT, WARM, COLD) and move them to the next best step.
+   - Do NOT force an appointment booking. Do not keep asking for dates and times unless the lead explicitly requests a visit.
+   - If they are HOT (strong interest): Offer to transfer to the agent right now, or send a property link / visit booking link.
+   - If they are WARM: Offer to send property information and follow up.
+   - If they are COLD: Store the result for future nurture.
+   - Offer to send a booking page link if they want to visit. Booking is optional, not mandatory.
 
 YOUR RULES:
 - Max 2-3 SHORT sentences per reply.
 - Never use bullet points or symbols in speech.
-- Never say you are an AI.
 - Sound 100% natural and human.
-- If the lead asks to speak to a human or real agent, say "I can certainly connect you with one of our senior agents right now. Please hold." and IMMEDIATELY call the transferCall function.
+- If the lead shows strong interest and accepts a transfer, IMMEDIATELY call the transferCall function.
+- If a transfer attempt fails (the system tells you the agent is busy or unavailable), you MUST say exactly: "It looks like the agent is currently unavailable and may be assisting another client or showing a property. I've already collected your information and will make sure the agent receives everything discussed today. The agent will contact you as soon as possible, typically within the same day. In the meantime, I'll also send you the property details and a direct booking link. If you'd like, you can schedule a property visit online at your convenience." AND you MUST immediately call the handle_failed_transfer function.
 - If the lead asks a question you don't know the answer to, say "That's a great question, let me transfer you to a senior agent who has that exact information." and call the transferCall function.
-- We ONLY have properties in the locations explicitly mentioned in OUR CURRENT LISTINGS. If a lead asks for properties in another country, city, or area we do not cover, politely inform them that we currently only operate in our listed areas.
-- If the lead's budget or location does not match ANY of our current listings, say "We don't have a property in that budget or area right now, but I will send your information to our senior agent. He will check the market and inform you within 5 hours." and IMMEDIATELY call the notifyAgentNoMatch function.`
+- If the lead wants a booking link, call the send_booking_link function.
+- If the lead wants property details, call the send_property_link function.
+- We ONLY have properties in the locations explicitly mentioned in OUR CURRENT LISTINGS.`
         }
       ],
       functions: [
+        {
+          name:        'handle_failed_transfer',
+          description: 'Call this function ONLY if a transfer attempt fails (e.g. agent did not answer) to automatically send the lead summary to the agent, send the links to the lead, and schedule a same-day follow-up.',
+          parameters: {
+            type: 'object',
+            properties: {
+              property_name: { type: 'string', description: 'Name of the property they were interested in.' }
+            },
+            required: [],
+          },
+        },
+        {
+          name:        'send_property_link',
+          description: 'Send the property information link to the lead via SMS/email. Call this when they want more details about a property.',
+          parameters: {
+            type: 'object',
+            properties: {
+              property_name: { type: 'string', description: 'Name of the property they are interested in.' }
+            },
+            required: ['property_name'],
+          },
+        },
+        {
+          name:        'send_booking_link',
+          description: 'Send a booking page link to the lead via SMS/email so they can book a visit later. Call this when they want to visit but prefer to book online themselves.',
+          parameters: {
+            type: 'object',
+            properties: {},
+            required: [],
+          },
+        },
         {
           name:        'bookVisit',
           description: 'Book a property visit. Call ONLY when lead confirms a specific date AND time.',

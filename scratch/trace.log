@@ -1,0 +1,552 @@
+Line 3007: 2 | else if (type === 'end-of-call-report') {
+Line 3008: 2 | const callId = event?.message?.call?.id || event?.call?.id;
+Line 3009: 3 | if (callId && processedWebhooks.has(callId)) {
+Line 3010: 3 | console.log(`[Idempotency] Webhook already processed for call ${callId}`);
+Line 3011: 3 | return res.json({ received: true, duplicate: true });
+Line 3012: 2 | }
+Line 3013: 2 | if (callId) processedWebhooks.add(callId);
+Line 3014: 3 | if (processedWebhooks.size > 1000) {
+Line 3015: 3 | const iterator = processedWebhooks.values();
+Line 3016: 3 | for (let i = 0; i < 200; i++) processedWebhooks.delete(iterator.next().value);
+Line 3017: 2 | }
+Line 3018: 2 | 
+Line 3019: 2 | const report = event?.message || {};
+Line 3020: 2 | const transcript = report.transcript || '';
+Line 3021: 2 | const recording = report.recordingUrl || null;
+Line 3022: 2 | const endedReason = report.endedReason || 'unknown';
+Line 3023: 2 | const duration = report.durationSeconds || 0;
+Line 3024: 2 | 
+Line 3025: 2 | console.log(`[CALL] ✅ Call completed — Duration: ${duration}s | endedReason: ${endedReason} | phone: ${phone}`);
+Line 3026: 2 | 
+Line 3027: 2 | // 1. Save call log to database
+Line 3028: 3 | await saveCallLog({
+Line 3029: 3 | leadId,
+Line 3030: 3 | agentId: metadata.agentId || null,
+Line 3031: 3 | teamId: metadata.teamId || null,
+Line 3032: 3 | phone,
+Line 3033: 3 | duration,
+Line 3034: 3 | transcript,
+Line 3035: 3 | recordingUrl: recording,
+Line 3036: 3 | status: duration > 10 ? 'answered' : 'no_answer',
+Line 3037: 2 | });
+Line 3038: 2 | 
+Line 3039: 2 | // 2. Extract structured qualification details from Vapi analysis report
+Line 3040: 2 | const analysis = event?.message?.analysis || event?.analysis || event?.message?.call?.analysis || {};
+Line 3041: 2 | const structuredData = analysis.structuredData || {};
+Line 3042: 2 | 
+Line 3043: 2 | // AI INTELLIGENCE EXTRACTION
+Line 3044: 2 | const { analyzeTranscript } = require('../services/intelligence.js');
+Line 3045: 2 | const aiIntelligence = await analyzeTranscript(transcript);
+Line 3046: 2 | 
+Line 3047: 2 | // ── CLASSIFY OUTCOME (single source of truth) ──────────────────────────
+Line 3048: 2 | // Track if specific tools were called during the call
+Line 3049: 2 | const _toolsUsed = event?.message?.call?.toolCalls || event?.message?.toolCalls || [];
+Line 3050: 2 | const bookingCreated = _toolsUsed.some(tc => tc?.function?.name === 'bookVisit' && tc?.result);
+Line 3051: 2 | const transferDone   = _toolsUsed.some(tc => tc?.function?.name === 'transferCall');
+Line 3052: 2 | const callbackSet    = _toolsUsed.some(tc => tc?.function?.name === 'update_lead_status' &&
+Line 3053: 2 | (tc?.function?.arguments?.status === 'callback_requested' || (typeof tc?.function?.arguments === 'string' && tc.function.arguments.includes('callback_requested'))));
+Line 3054: 2 | 
+Line 3055: 2 | const callStatus = classifyOutcome(endedReason, duration, aiIntelligence, bookingCreated, transferDone, callbackSet);
+Line 3056: 2 | const retryPolicy = getRetryPolicy(callStatus, endedReason);
+Line 3057: 2 | const isFailed = [OUTCOMES.NO_ANSWER, OUTCOMES.BUSY, OUTCOMES.VOICEMAIL, OUTCOMES.CALL_FAILED, OUTCOMES.HUNG_UP].includes(callStatus);
+Line 3058: 2 | 
+Line 3059: 2 | console.log(`[OUTCOME] Classified as: ${callStatus} | retry: ${retryPolicy.shouldRetry} | retryDelay: ${retryPolicy.retryDelayMinutes}min`);
+Line 3060: 2 | 
+Line 3061: 3 | const extractedLead = {
+Line 3062: 3 | name: call.customer?.name || metadata.name || null,
+Line 3063: 3 | phone: normalizePhone(phone || call.customer?.number || aiIntelligence.extracted_phone || metadata.phone || null),
+Line 3064: 3 | email: normalizeEmail(metadata.email || call.customer?.email || aiIntelligence.extracted_email || structuredData.email || structuredData.client_email || null),
+Line 3065: 3 | budget: aiIntelligence.extracted_budget_numeric || structuredData.budget || metadata.budget || null,
+Line 3066: 3 | bhk_preference: structuredData.bhk_preference || structuredData.bhkPreference || structuredData.bhk || null,
+Line 3067: 3 | pre_approval_status: structuredData.pre_approval_status || structuredData.preApprovalStatus || structuredData.preApproval || null,
+Line 3068: 3 | property_interest: structuredData.property_interest || structuredData.propertyInterest || metadata.interest || null,
+Line 3069: 3 | notes: aiIntelligence.call_summary || analysis.summary || transcript.substring(0, 500) || null,
+Line 3070: 3 | status: callStatus,
+Line 3071: 3 | qualification_score: aiIntelligence.closing_probability || parseInt(structuredData.qualification_score || structuredData.score || (structuredData.pre_approval_status === 'yes' ? 90 : 70)) || 70,
+Line 3072: 3 | lead_score: aiIntelligence.lead_score || 'WARM',
+Line 3073: 3 | priority: aiIntelligence.priority || 'FOLLOW UP',
+Line 3074: 3 | intent: aiIntelligence.intent || 'Unknown',
+Line 3075: 3 | timeline: aiIntelligence.timeline || 'Unknown',
+Line 3076: 3 | objections: aiIntelligence.objections || [],
+Line 3077: 3 | potential_commission: aiIntelligence.potential_commission || 0,
+Line 3078: 3 | call_summary: aiIntelligence.call_summary || analysis.summary || '',
+Line 3079: 3 | ai_notes: aiIntelligence.ai_notes || ''
+Line 3080: 2 | };
+Line 3081: 2 | 
+Line 3082: 2 | // 3. Find and update the existing lead in database and dashboard snapshot
+Line 3083: 2 | let finalLeadId = leadId;
+Line 3084: 2 | const { createClient } = require('@supabase/supabase-js');
+Line 3085: 2 | const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+Line 3086: 2 | 
+Line 3087: 2 | let existingLead = null;
+Line 3088: 2 | let mongoLeadFromSnapshot = null;
+Line 3089: 2 | 
+Line 3090: 2 | // FIRST: Check local MongoDB Snapshot for the lead by ID or phone number
+Line 3091: 3 | try {
+Line 3092: 3 | const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+Line 3093: 4 | if (snap && snap.data && snap.data.pe_leads) {
+Line 3094: 4 | let leads = typeof snap.data.pe_leads === 'string'
+Line 3095: 4 | ? JSON.parse(snap.data.pe_leads)
+Line 3096: 4 | : snap.data.pe_leads;
+Line 3097: 5 | if (Array.isArray(leads)) {
+Line 3098: 5 | // Check by ID first
+Line 3099: 6 | if (finalLeadId) {
+Line 3100: 6 | mongoLeadFromSnapshot = leads.find(l => l.id == finalLeadId);
+Line 3101: 5 | }
+Line 3102: 5 | // Fallback: Check by Phone number
+Line 3103: 6 | if (!mongoLeadFromSnapshot && phone) {
+Line 3104: 6 | const normPhone = normalizePhone(phone);
+Line 3105: 6 | mongoLeadFromSnapshot = leads.find(l => normalizePhone(l.phone) === normPhone);
+Line 3106: 5 | }
+Line 3107: 4 | }
+Line 3108: 3 | }
+Line 3109: 3 | } catch (e) {
+Line 3110: 3 | console.error('Error searching MongoDB snapshot for existing lead:', e.message);
+Line 3111: 2 | }
+Line 3112: 2 | 
+Line 3113: 3 | if (mongoLeadFromSnapshot) {
+Line 3114: 3 | console.log(`✅ Found existing lead ${mongoLeadFromSnapshot.id} in MongoDB snapshot!`);
+Line 3115: 3 | existingLead = { table: 'mongodb', data: mongoLeadFromSnapshot };
+Line 3116: 3 | finalLeadId = mongoLeadFromSnapshot.id;
+Line 3117: 2 | }
+Line 3118: 2 | 
+Line 3119: 2 | // Check Supabase if not resolved or to update Supabase tables as well
+Line 3120: 3 | if (!existingLead && finalLeadId) {
+Line 3121: 4 | try {
+Line 3122: 4 | let { data } = await sb.from('team_leads').select('*').eq('id', finalLeadId).single();
+Line 3123: 5 | if (data) {
+Line 3124: 5 | existingLead = { table: 'team_leads', data };
+Line 3125: 5 | } else {
+Line 3126: 5 | let { data: lData } = await sb.from('leads').select('*').eq('id', finalLeadId).single();
+Line 3127: 5 | if (lData) existingLead = { table: 'leads', data: lData };
+Line 3128: 4 | }
+Line 3129: 3 | } catch (e) { }
+Line 3130: 2 | }
+Line 3131: 2 | 
+Line 3132: 3 | if (!existingLead && phone) {
+Line 3133: 4 | try {
+Line 3134: 4 | const normPhone = normalizePhone(phone);
+Line 3135: 4 | let { data } = await sb.from('team_leads').select('*').eq('phone', normPhone).single();
+Line 3136: 5 | if (data) {
+Line 3137: 5 | existingLead = { table: 'team_leads', data };
+Line 3138: 5 | finalLeadId = data.id;
+Line 3139: 5 | } else {
+Line 3140: 5 | let { data: lData } = await sb.from('leads').select('*').eq('phone', normPhone).single();
+Line 3141: 6 | if (lData) {
+Line 3142: 6 | existingLead = { table: 'leads', data: lData };
+Line 3143: 6 | finalLeadId = lData.id;
+Line 3144: 5 | }
+Line 3145: 4 | }
+Line 3146: 3 | } catch (e) { }
+Line 3147: 2 | }
+Line 3148: 2 | 
+Line 3149: 3 | if (existingLead) {
+Line 3150: 3 | console.log(`📝 Updating existing lead ${finalLeadId} in Supabase table "${existingLead.table}"`);
+Line 3151: 3 | const updates = {};
+Line 3152: 3 | if (extractedLead.budget) updates.budget = extractedLead.budget;
+Line 3153: 3 | if (extractedLead.bhk_preference) updates.bhk_preference = extractedLead.bhk_preference;
+Line 3154: 3 | if (extractedLead.pre_approval_status) updates.pre_approval_status = extractedLead.pre_approval_status;
+Line 3155: 3 | if (extractedLead.property_interest) updates.property_interest = extractedLead.property_interest;
+Line 3156: 3 | if (extractedLead.qualification_score) updates.qualification_score = extractedLead.qualification_score;
+Line 3157: 3 | 
+Line 3158: 3 | // Add new intelligence fields to Supabase updates if applicable
+Line 3159: 3 | if (extractedLead.lead_score) updates.lead_score = extractedLead.lead_score;
+Line 3160: 3 | if (extractedLead.priority) updates.priority = extractedLead.priority;
+Line 3161: 3 | if (extractedLead.intent) updates.intent = extractedLead.intent;
+Line 3162: 3 | if (extractedLead.timeline) updates.timeline = extractedLead.timeline;
+Line 3163: 3 | if (extractedLead.potential_commission) updates.potential_commission = extractedLead.potential_commission;
+Line 3164: 3 | 
+Line 3165: 3 | if (extractedLead.notes) updates.notes = (existingLead.data.notes ? existingLead.data.notes + '\n\n' : '') + `[AI Call Summary]: ${extractedLead.call_summary}\n[AI Notes]: ${extractedLead.ai_notes}\n[Objections]: ${extractedLead.objections.join(', ')}`;
+Line 3166: 3 | updates.stage = 'contacted';
+Line 3167: 3 | updates.updated_at = new Date().toISOString();
+Line 3168: 3 | 
+Line 3169: 4 | if (existingLead.table === 'team_leads') {
+Line 3170: 4 | await sb.from('team_leads').update(updates).eq('id', finalLeadId);
+Line 3171: 4 | } else {
+Line 3172: 5 | await sb.from('leads').update({
+Line 3173: 5 | budget: updates.budget,
+Line 3174: 5 | bhk_preference: updates.bhk_preference,
+Line 3175: 5 | pre_approval_status: updates.pre_approval_status,
+Line 3176: 5 | property_interest: updates.property_interest,
+Line 3177: 5 | qualification_score: updates.qualification_score,
+Line 3178: 5 | notes: updates.notes,
+Line 3179: 5 | status: 'Contacted'
+Line 3180: 4 | }).eq('id', finalLeadId);
+Line 3181: 3 | }
+Line 3182: 3 | 
+Line 3183: 3 | // Sync to MongoDB DataSnapshot pe_leads
+Line 3184: 4 | await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, {
+Line 3185: 4 | ...updates,
+Line 3186: 4 | pipeline_stage: 'Contacted',
+Line 3187: 4 | status: 'Contacted'
+Line 3188: 3 | });
+Line 3189: 3 | } else if (phone) {
+Line 3190: 3 | // Create new lead (inbound call)
+Line 3191: 3 | console.log(`➕ Creating new lead in database for inbound phone: ${phone}`);
+Line 3192: 3 | 
+Line 3193: 4 | const newLeadRecord = {
+Line 3194: 4 | name: extractedLead.name || 'New Inbound Lead',
+Line 3195: 4 | phone: phone,
+Line 3196: 4 | email: extractedLead.email || '',
+Line 3197: 4 | property_interest: extractedLead.property_interest || 'General Inquiry',
+Line 3198: 4 | budget: extractedLead.budget || 'Flexible',
+Line 3199: 4 | lead_score: extractedLead.lead_score || 'WARM',
+Line 3200: 4 | priority: extractedLead.priority || 'FOLLOW UP',
+Line 3201: 4 | intent: extractedLead.intent || 'Unknown',
+Line 3202: 4 | timeline: extractedLead.timeline || 'Unknown',
+Line 3203: 4 | potential_commission: extractedLead.potential_commission || 0,
+Line 3204: 4 | qualification_score: extractedLead.qualification_score || 70,
+Line 3205: 4 | notes: (extractedLead.notes ? `[AI Call Summary]: ${extractedLead.call_summary}\n[AI Notes]: ${extractedLead.ai_notes}\n[Objections]: ${extractedLead.objections.join(', ')}` : ''),
+Line 3206: 4 | bhk_preference: extractedLead.bhk_preference || 'N/A',
+Line 3207: 4 | pre_approval_status: extractedLead.pre_approval_status || 'N/A',
+Line 3208: 4 | qualification_score: extractedLead.qualification_score || 50,
+Line 3209: 4 | source: 'AI Inbound Call',
+Line 3210: 4 | status: 'New',
+Line 3211: 4 | notes: extractedLead.notes ? `[AI Inbound Call Summary]: ${extractedLead.notes}` : 'Created from AI Inbound Call'
+Line 3212: 3 | };
+Line 3213: 3 | 
+Line 3214: 3 | let savedSbLead = null;
+Line 3215: 4 | try {
+Line 3216: 4 | const { data, error } = await sb.from('leads').insert([newLeadRecord]).select().single();
+Line 3217: 4 | if (data) savedSbLead = data;
+Line 3218: 3 | } catch (e) { }
+Line 3219: 3 | 
+Line 3220: 3 | let savedTeamLead = null;
+Line 3221: 4 | try {
+Line 3222: 5 | const newTeamLeadRecord = {
+Line 3223: 5 | team_id: AGENT_EMAIL,
+Line 3224: 5 | name: newLeadRecord.name,
+Line 3225: 5 | phone: newLeadRecord.phone,
+Line 3226: 5 | email: newLeadRecord.email,
+Line 3227: 5 | property_interest: newLeadRecord.property_interest,
+Line 3228: 5 | budget: newLeadRecord.budget,
+Line 3229: 5 | source: newLeadRecord.source,
+Line 3230: 5 | stage: 'contacted',
+Line 3231: 5 | notes: newLeadRecord.notes
+Line 3232: 4 | };
+Line 3233: 4 | const { data, error } = await sb.from('team_leads').insert([newTeamLeadRecord]).select().single();
+Line 3234: 4 | if (data) savedTeamLead = data;
+Line 3235: 3 | } catch (e) { }
+Line 3236: 3 | 
+Line 3237: 4 | try {
+Line 3238: 4 | let snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+Line 3239: 4 | if (!snapshot) snapshot = new DataSnapshot({ email: AGENT_EMAIL, data: {} });
+Line 3240: 4 | if (!snapshot.data) snapshot.data = {};
+Line 3241: 4 | 
+Line 3242: 4 | let leads = snapshot.data.pe_leads || [];
+Line 3243: 5 | if (typeof leads === 'string') {
+Line 3244: 5 | try { leads = JSON.parse(leads); } catch (e) { leads = []; }
+Line 3245: 4 | }
+Line 3246: 4 | 
+Line 3247: 5 | const mongoLead = {
+Line 3248: 5 | id: savedTeamLead?.id || savedSbLead?.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+Line 3249: 5 | name: newLeadRecord.name,
+Line 3250: 5 | phone: newLeadRecord.phone,
+Line 3251: 5 | email: newLeadRecord.email,
+Line 3252: 5 | property_interest: newLeadRecord.property_interest,
+Line 3253: 5 | budget: newLeadRecord.budget,
+Line 3254: 5 | bhk_preference: newLeadRecord.bhk_preference,
+Line 3255: 5 | pre_approval_status: newLeadRecord.pre_approval_status,
+Line 3256: 5 | qualification_score: newLeadRecord.qualification_score,
+Line 3257: 5 | source: newLeadRecord.source,
+Line 3258: 5 | status: 'Contacted',
+Line 3259: 5 | pipeline_stage: 'Contacted',
+Line 3260: 5 | notes: newLeadRecord.notes,
+Line 3261: 5 | created_at: new Date().toISOString()
+Line 3262: 4 | };
+Line 3263: 4 | 
+Line 3264: 4 | finalLeadId = mongoLead.id;
+Line 3265: 4 | 
+Line 3266: 4 | leads.unshift(mongoLead);
+Line 3267: 4 | snapshot.data.pe_leads = leads;
+Line 3268: 4 | snapshot.markModified('data');
+Line 3269: 4 | await snapshot.save();
+Line 3270: 4 | console.log(`✅ Saved new inbound lead ${mongoLead.id} to MongoDB snapshot`);
+Line 3271: 4 | } catch (mErr) {
+Line 3272: 4 | console.error('❌ Failed to save new inbound lead to MongoDB:', mErr.message);
+Line 3273: 3 | }
+Line 3274: 2 | }
+Line 3275: 2 | 
+Line 3276: 2 | // 4. Format and Sync Call Log and Transcript to MongoDB Snapshot pe_calls
+Line 3277: 2 | const leadNameForCall = (existingLead?.data?.name) || extractedLead.name || 'New Inbound Lead';
+Line 3278: 2 | 
+Line 3279: 2 | const minutes = Math.floor(duration / 60);
+Line 3280: 2 | const seconds = Math.floor(duration % 60);
+Line 3281: 2 | const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+Line 3282: 2 | 
+Line 3283: 2 | const messages = event?.message?.call?.messages || event?.message?.messages || [];
+Line 3284: 2 | let formattedTranscript = [];
+Line 3285: 3 | if (messages.length > 0) {
+Line 3286: 4 | formattedTranscript = messages.map(m => {
+Line 3287: 4 | const role = m.role === 'assistant' ? 'assistant' : 'user';
+Line 3288: 4 | const speakerName = role === 'assistant' ? 'Aria' : (leadNameForCall || 'User');
+Line 3289: 4 | const txt = m.message || m.content || '';
+Line 3290: 5 | return {
+Line 3291: 5 | role,
+Line 3292: 5 | content: txt,
+Line 3293: 5 | speaker: speakerName,
+Line 3294: 5 | text: txt
+Line 3295: 4 | };
+Line 3296: 3 | });
+Line 3297: 3 | } else if (typeof transcript === 'string' && transcript.length > 0) {
+Line 3298: 4 | formattedTranscript = transcript.split('\n').map(line => {
+Line 3299: 4 | const parts = line.split(':');
+Line 3300: 5 | if (parts.length >= 2) {
+Line 3301: 5 | const role = parts[0].trim().toLowerCase().includes('assistant') ? 'assistant' : 'user';
+Line 3302: 5 | const speakerName = role === 'assistant' ? 'Aria' : (leadNameForCall || 'User');
+Line 3303: 5 | const txt = parts.slice(1).join(':').trim();
+Line 3304: 6 | return {
+Line 3305: 6 | role,
+Line 3306: 6 | content: txt,
+Line 3307: 6 | speaker: speakerName,
+Line 3308: 6 | text: txt
+Line 3309: 5 | };
+Line 3310: 4 | }
+Line 3311: 4 | const txt = line.trim();
+Line 3312: 5 | return {
+Line 3313: 5 | role: 'user',
+Line 3314: 5 | content: txt,
+Line 3315: 5 | speaker: leadNameForCall || 'User',
+Line 3316: 5 | text: txt
+Line 3317: 4 | };
+Line 3318: 3 | }).filter(t => t.content);
+Line 3319: 2 | }
+Line 3320: 2 | 
+Line 3321: 2 | const urgencyScore = extractedLead.qualification_score ? Math.min(10, Math.max(1, Math.round(extractedLead.qualification_score / 10))) : 5;
+Line 3322: 2 | 
+Line 3323: 2 | let callOutcome = 'Prospective';
+Line 3324: 3 | if (duration < 10 || isFailed) {
+Line 3325: 3 | callOutcome = 'No Answer';
+Line 3326: 3 | } else if (transcript.toLowerCase().includes('bookvisit') || transcript.toLowerCase().includes('visit booked') || transcript.toLowerCase().includes('confirmed')) {
+Line 3327: 3 | callOutcome = 'Confirmed';
+Line 3328: 2 | }
+Line 3329: 2 | 
+Line 3330: 2 | // Enforce matching lead_id for new inbound leads
+Line 3331: 3 | if (!finalLeadId) {
+Line 3332: 3 | finalLeadId = 'lead_' + Date.now();
+Line 3333: 2 | }
+Line 3334: 2 | 
+Line 3335: 3 | await syncCallLogToSnapshot(AGENT_EMAIL, {
+Line 3336: 3 | id: call.id || ('call_' + Date.now()),
+Line 3337: 3 | lead_id: finalLeadId,
+Line 3338: 3 | lead_name: leadNameForCall,
+Line 3339: 3 | urgency: urgencyScore,
+Line 3340: 3 | outcome: callStatus,
+Line 3341: 3 | duration: durationStr,
+Line 3342: 3 | transcript: formattedTranscript,
+Line 3343: 3 | call_status: callStatus,
+Line 3344: 3 | ended_reason: endedReason,
+Line 3345: 3 | created_at: new Date().toISOString()
+Line 3346: 2 | });
+Line 3347: 2 | 
+Line 3348: 2 | // 5. Build and save structured CallResult JSON
+Line 3349: 3 | const callResult = buildCallResult({
+Line 3350: 3 | leadId: finalLeadId,
+Line 3351: 3 | callId: call.id || callId,
+Line 3352: 3 | status: callStatus,
+Line 3353: 3 | endedReason,
+Line 3354: 3 | transcript,
+Line 3355: 3 | aiIntelligence,
+Line 3356: 3 | duration,
+Line 3357: 3 | retryScheduled: retryPolicy.shouldRetry,
+Line 3358: 3 | retryTimeMinutes: retryPolicy.retryDelayMinutes,
+Line 3359: 3 | bookingCreated,
+Line 3360: 3 | transferRequired: callStatus === OUTCOMES.TRANSFERRED,
+Line 3361: 3 | followUpRequired: [OUTCOMES.INTERESTED, OUTCOMES.HUNG_UP, OUTCOMES.CALLBACK_REQUESTED].includes(callStatus),
+Line 3362: 2 | });
+Line 3363: 2 | console.log('[CALL_RESULT]', JSON.stringify(callResult));
+Line 3364: 2 | 
+Line 3365: 2 | // 6. Send Bell Notification to Dashboard
+Line 3366: 3 | await notifyAgent(AGENT_EMAIL, {
+Line 3367: 3 | title: `📞 Call Ended: ${leadNameForCall}`,
+Line 3368: 3 | description: `Duration: ${durationStr} · Outcome: ${callStatus} · Score: ${urgencyScore}/10`,
+Line 3369: 3 | type: 'info',
+Line 3370: 3 | icon: 'fas fa-phone-alt'
+Line 3371: 2 | });
+Line 3372: 2 | 
+Line 3373: 2 | // 7. Per-outcome actions
+Line 3374: 2 | const leadEmail = extractedLead.email || metadata.email || await getLeadEmail(leadId, phone);
+Line 3375: 3 | const leadMeta = {
+Line 3376: 3 | phone, id: finalLeadId,
+Line 3377: 3 | name: call.customer?.name || metadata.name || 'Lead',
+Line 3378: 3 | email: leadEmail || metadata.email || '',
+Line 3379: 3 | property_interest: metadata.interest || '',
+Line 3380: 3 | budget: metadata.budget || ''
+Line 3381: 2 | };
+Line 3382: 2 | 
+Line 3383: 2 | // Look up active visit for booking confirmation
+Line 3384: 2 | let activeVisit = null;
+Line 3385: 3 | try {
+Line 3386: 3 | const { createClient } = require('@supabase/supabase-js');
+Line 3387: 3 | const sbV = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+Line 3388: 3 | const qPhone = normalizePhone(phone || '');
+Line 3389: 3 | const { data: vData } = await sbV.from('visits')
+Line 3390: 3 | .select('*').neq('status','cancelled').neq('status','rejected')
+Line 3391: 3 | .or(`client_phone.eq.${qPhone}${finalLeadId ? `,lead_id.eq.${finalLeadId}` : ''}`)
+Line 3392: 3 | .order('created_at', { ascending: false }).limit(1);
+Line 3393: 3 | if (vData && vData.length > 0) activeVisit = vData[0];
+Line 3394: 2 | } catch (e) { console.error('[OUTCOME] Visit lookup error:', e.message); }
+Line 3395: 2 | 
+Line 3396: 2 | let followupProperties = [];
+Line 3397: 3 | try {
+Line 3398: 3 | const snapProp = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+Line 3399: 4 | if (snapProp?.data?.pe_properties) {
+Line 3400: 4 | followupProperties = typeof snapProp.data.pe_properties === 'string'
+Line 3401: 4 | ? JSON.parse(snapProp.data.pe_properties) : snapProp.data.pe_properties;
+Line 3402: 3 | }
+Line 3403: 2 | } catch (e) { /* silent */ }
+Line 3404: 2 | 
+Line 3405: 2 | const isLeadBooked = callStatus === OUTCOMES.BOOKED || !!activeVisit;
+Line 3406: 2 | 
+Line 3407: 3 | if (isLeadBooked && leadEmail) {
+Line 3408: 3 | console.log(`🏡 Lead accepted to visit. Sending confirmed booking email for ${activeVisit?.property_name || 'Property'} to ${leadEmail}`);
+Line 3409: 3 | 
+Line 3410: 3 | let propertyAddress = 'Confirmed Property Location';
+Line 3411: 3 | let propertyDetailsHtml = '';
+Line 3412: 3 | const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
+Line 3413: 3 | const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
+Line 3414: 3 | const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+Line 3415: 3 | const websiteUrl = process.env.BASE_URL || 'https://scaleover-lemon.vercel.app';
+Line 3416: 3 | const propName = activeVisit?.property_name || extractedLead.property_interest || 'Premium Property';
+Line 3417: 3 | 
+Line 3418: 3 | // Try to look up address and property details
+Line 3419: 4 | try {
+Line 3420: 4 | const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+Line 3421: 5 | if (snapshot && snapshot.data && snapshot.data.pe_properties) {
+Line 3422: 5 | const properties = typeof snapshot.data.pe_properties === 'string'
+Line 3423: 5 | ? JSON.parse(snapshot.data.pe_properties)
+Line 3424: 5 | : snapshot.data.pe_properties;
+Line 3425: 5 | const found = properties.find(p =>
+Line 3426: 5 | p.name?.toLowerCase() === propName.toLowerCase() ||
+Line 3427: 5 | p.id === activeVisit?.property_id
+Line 3428: 5 | );
+Line 3429: 6 | if (found) {
+Line 3430: 6 | if (found.address) propertyAddress = found.address;
+Line 3431: 6 | 
+Line 3432: 6 | const propLink = `${websiteUrl}/property.html?id=${found.id}`;
+Line 3433: 6 | propertyDetailsHtml = `
+Line 3434: 6 | <!-- Property Info Section -->
+Line 3435: 6 | <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+Line 3436: 6 | <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">🏢 PROPERTY DETAILS</h3>
+Line 3437: 6 | <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:20px">
+Line 3438: 6 | <h4 style="margin:0 0 8px;color:#faf8f4;font-size:16px">${found.name}</h4>
+Line 3439: 6 | <p style="margin:0 0 12px;color:rgba(255,255,255,0.6);font-size:13px">${found.description || 'Premium residence in a premium community.'}</p>
+Line 3440: 6 | <table style="width:100%;font-size:13px;color:rgba(255,255,255,0.8)">
+Line 3441: 6 | <tr>
+Line 3442: 6 | <td style="padding:4px 0;color:rgba(255,255,255,0.4)">💰 Price:</td>
+Line 3443: 6 | <td style="padding:4px 0;font-weight:bold;color:#c5a059">${found.price || 'Contact for Price'}</td>
+Line 3444: 6 | </tr>
+Line 3445: 6 | <tr>
+Line 3446: 6 | <td style="padding:4px 0;color:rgba(255,255,255,0.4)">🛏️ BHK:</td>
+Line 3447: 6 | <td style="padding:4px 0;font-weight:bold">${found.bhk || found.bedrooms || 'N/A'}</td>
+Line 3448: 6 | </tr>
+Line 3449: 6 | </table>
+Line 3450: 6 | <div style="margin-top:16px">
+Line 3451: 6 | <a href="${propLink}" target="_blank" style="display:inline-block;background:transparent;border:1px solid #c5a059;color:#c5a059;padding:8px 18px;text-decoration:none;border-radius:4px;font-size:13px;font-weight:600">View Property Photos & Details →</a>
+Line 3452: 6 | </div>
+Line 3453: 6 | </div>
+Line 3454: 6 | </div>
+Line 3455: 6 | `;
+Line 3456: 5 | }
+Line 3457: 4 | }
+Line 3458: 3 | } catch (e) { console.error('Lookup address in end-of-call followups error:', e.message); }
+Line 3459: 3 | 
+Line 3460: 3 | const visitDateStr = activeVisit?.visit_date || 'To be confirmed';
+Line 3461: 3 | const visitTimeStr = activeVisit?.visit_time || 'To be confirmed';
+Line 3462: 3 | const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(propertyAddress)}`;
+Line 3463: 3 | 
+Line 3464: 4 | await sendEmail({
+Line 3465: 4 | to: leadEmail,
+Line 3466: 4 | subject: `🏡 CONFIRMED: Your property viewing at ${propName}`,
+Line 3467: 4 | message: `Hi ${extractedLead.name || 'there'},\n\nThank you for speaking with us! We have confirmed your showing itinerary.\n\nDate: ${visitDateStr}\nTime: ${visitTimeStr}\nProperty: ${propName}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nExplore more listings: ${websiteUrl}`,
+Line 3468: 4 | html: `
+Line 3469: 4 | <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
+Line 3470: 4 | <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
+Line 3471: 4 | <h1 style="margin:0;color:#c5a059;font-size:24px;font-weight:300;letter-spacing:2px">🏡 VISIT CONFIRMED</h1>
+Line 3472: 4 | <p style="margin:6px 0 0;color:rgba(255,255,255,0.6);font-size:14px">${agencyName} Elite Real Estate</p>
+Line 3473: 4 | </div>
+Line 3474: 4 | <div style="padding:32px;color:#faf8f4">
+Line 3475: 4 | <p style="font-size:16px;line-height:1.6;color:rgba(255,255,255,0.85)">
+Line 3476: 4 | Hi <strong>${extractedLead.name || 'there'}</strong>,
+Line 3477: 4 | </p>
+Line 3478: 4 | <p style="font-size:15px;line-height:1.6;color:rgba(255,255,255,0.8)">
+Line 3479: 4 | Thank you for speaking with us today! We are thrilled to confirm your private showing for the premium property <strong>${propName}</strong>. Please find your showing itinerary details below:
+Line 3480: 4 | </p>
+Line 3481: 4 | 
+Line 3482: 4 | <!-- Details Box -->
+Line 3483: 4 | <div style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:8px;padding:24px;margin:24px 0">
+Line 3484: 4 | <table style="width:100%;border-collapse:collapse;font-size:14px">
+Line 3485: 4 | <tr>
+Line 3486: 4 | <td style="padding:8px 0;color:rgba(255,255,255,0.45);width:120px;font-weight:600">🏠 Property</td>
+Line 3487: 4 | <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${propName}</td>
+Line 3488: 4 | </tr>
+Line 3489: 4 | <tr>
+Line 3490: 4 | <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">📅 Date</td>
+Line 3491: 4 | <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visitDateStr}</td>
+Line 3492: 4 | </tr>
+Line 3493: 4 | <tr>
+Line 3494: 4 | <td style="padding:8px 0;color:rgba(255,255,255,0.45);font-weight:600">⏰ Time</td>
+Line 3495: 4 | <td style="padding:8px 0;color:#faf8f4;font-weight:bold">${visitTimeStr}</td>
+Line 3496: 4 | </tr>
+Line 3497: 4 | <tr>
+Line 3498: 4 | <td style="padding:8px 0;color:rgba(255,255,255,0.45);vertical-align:top;font-weight:600">📍 Location</td>
+Line 3499: 4 | <td style="padding:8px 0;color:#faf8f4;line-height:1.4">
+Line 3500: 4 | ${propertyAddress}<br>
+Line 3501: 4 | <a href="${mapUrl}" target="_blank" style="display:inline-block;margin-top:6px;color:#c5a059;text-decoration:none;font-weight:600;font-size:12px">🗺️ Open in Google Maps →</a>
+Line 3502: 4 | </td>
+Line 3503: 4 | </tr>
+Line 3504: 4 | </table>
+Line 3505: 4 | </div>
+Line 3506: 4 | 
+Line 3507: 4 | ${propertyDetailsHtml}
+Line 3508: 4 | 
+Line 3509: 4 | <!-- Agent Card -->
+Line 3510: 4 | <div style="border-top:1px solid rgba(255,255,255,0.08);padding-top:24px;margin-top:24px">
+Line 3511: 4 | <h3 style="margin:0 0 16px;color:#c5a059;font-size:15px;font-weight:600;letter-spacing:1px">📋 DEDICATED REAL ESTATE ADVISOR</h3>
+Line 3512: 4 | <div style="display:flex;align-items:center;gap:16px">
+Line 3513: 4 | <div>
+Line 3514: 4 | <div style="font-weight:bold;font-size:16px;color:#faf8f4">${agentName}</div>
+Line 3515: 4 | <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px">${agencyName} Elite Partner</div>
+Line 3516: 4 | <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6">
+Line 3517: 4 | 📱 Phone: <strong>${agentPhone}</strong><br>
+Line 3518: 4 | ✉️ Email: <strong>${AGENT_EMAIL}</strong>
+Line 3519: 4 | </div>
+Line 3520: 4 | </div>
+Line 3521: 4 | </div>
+Line 3522: 4 | </div>
+Line 3523: 4 | 
+Line 3524: 4 | <!-- Website CTA -->
+Line 3525: 4 | <div style="text-align:center;margin-top:32px;padding-top:24px;border-top:1px solid rgba(255,255,255,0.08)">
+Line 3526: 4 | <a href="${websiteUrl}" target="_blank" style="background:#c5a059;color:#0a0e14;padding:12px 28px;text-decoration:none;border-radius:6px;font-weight:bold;display:inline-block;font-size:15px">Explore More Exclusive Listings →</a>
+Line 3527: 4 | <p style="margin:12px 0 0;font-size:12px;color:rgba(255,255,255,0.45)">Visit our official website: <a href="${websiteUrl}" target="_blank" style="color:#c5a059">${websiteUrl}</a></p>
+Line 3528: 4 | </div>
+Line 3529: 4 | 
+Line 3530: 4 | <div style="margin-top:32px;text-align:center;font-size:12px;color:rgba(255,255,255,0.3)">
+Line 3531: 4 | Please notify us at least 24 hours in advance if you need to reschedule.<br>
+Line 3532: 4 | © ${new Date().getFullYear()} ${agencyName}. All rights reserved.
+Line 3533: 4 | </div>
+Line 3534: 4 | </div>
+Line 3535: 4 | </div>`
+Line 3536: 3 | });
+Line 3537: 3 | } else {
+Line 3538: 3 | // Standard follow-ups for non-booked leads
+Line 3539: 4 | const leadForFollowup = {
+Line 3540: 4 | phone,
+Line 3541: 4 | email: leadEmail || null,
+Line 3542: 4 | name: call.customer?.name || 'there',
+Line 3543: 4 | property_interest: call.metadata?.interest || metadata.interest || '',
+Line 3544: 4 | budget: call.metadata?.budget || metadata.budget || '',
+Line 3545: 4 | id: leadId,
+Line 3546: 3 | };
+Line 3547: 3 | let followupProperties = [];
+Line 3548: 4 | try {
+Line 3549: 4 | const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+Line 3550: 5 | if (snap?.data?.pe_properties) {
+Line 3551: 5 | followupProperties = typeof snap.data.pe_properties === 'string'
+Line 3552: 5 | ? JSON.parse(snap.data.pe_properties)
+Line 3553: 5 | : snap.data.pe_properties;
+Line 3554: 4 | }
+Line 3555: 3 | } catch (e) { console.error('VAPI followup property fetch error:', e.message); }
+Line 3556: 3 | await scheduleFollowUps(leadForFollowup, followupProperties);
+Line 3557: 2 | }
+Line 3558: 1 | }
