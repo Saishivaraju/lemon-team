@@ -2977,7 +2977,7 @@
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 3000);
         const res = await fetch('/api/sync?email=' + encodeURIComponent(email), {
-          headers: { 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'x-api-secret': 'zorvo_secret_2026' },
           signal: ctrl.signal
         });
         clearTimeout(timer);
@@ -3005,7 +3005,7 @@
         }
         fetch('/api/sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ email: email, data: payload })
         }).catch(e => { });
       } catch (e) { }
@@ -3188,7 +3188,7 @@
         const agentEmail = creds ? creds.username : 'saishivaraju.m2002@gmail.com';
         fetch('/api/visits', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ agentEmail, visit: booking })
         }).catch(e => console.warn('Booking API Error:', e));
 
@@ -3213,7 +3213,7 @@
       const agentEmail2 = creds2 ? creds2.username : 'saishivaraju.m2002@gmail.com';
       fetch('/api/leads', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
         body: JSON.stringify({ agentEmail: agentEmail2, lead })
       }).catch(e => console.warn('Lead API Error:', e));
 
@@ -3267,7 +3267,7 @@
 
       fetch('/api/leads', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
         body: JSON.stringify({ agentEmail, lead })
       }).catch(e => console.warn('Lead API Error:', e));
     }
@@ -3500,7 +3500,7 @@
           setTimeout(() => qCtrl.abort(), 8000);
           const res = await fetch('/api/qualify', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
             body: JSON.stringify(payload),
             signal: qCtrl.signal
           });
@@ -3581,7 +3581,7 @@
           setTimeout(() => aCtrl.abort(), 8000);
           const res = await fetch('/api/agreements', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
             body: JSON.stringify(payload),
             signal: aCtrl.signal
           });
@@ -3635,7 +3635,7 @@
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 4000);
         const res = await fetch('/api/availability?date=' + date, {
-          headers: { 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'x-api-secret': 'zorvo_secret_2026' },
           signal: ctrl.signal
         });
         clearTimeout(timer);
@@ -3701,14 +3701,14 @@
         };
         await fetch('/api/leads', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ agentEmail: agent.email || 'saishivaraju.m2002@gmail.com', lead: leadPayload })
         }).catch(e => console.warn('Failed to save lead prior to booking:', e));
 
         // 2. Save the Visit
         const res = await fetch('/api/visits', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ agentEmail: agent.email || 'saishivaraju.m2002@gmail.com', visit }),
           signal: ctrl.signal
         });
@@ -3773,7 +3773,7 @@
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-secret': 'propedge_secret_2026'
+            'x-api-secret': 'zorvo_secret_2026'
           },
           body: JSON.stringify({
             to: agent.email || 'saishivaraju.m2002@gmail.com',
@@ -3802,7 +3802,7 @@
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-secret': 'propedge_secret_2026'
+            'x-api-secret': 'zorvo_secret_2026'
           },
           body: JSON.stringify({
             to: visit.client_email,

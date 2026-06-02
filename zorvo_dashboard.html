@@ -6716,7 +6716,7 @@
         const oldBookings = (JSON.parse(localStorage.getItem('pe_bookings') || '[]')).length;
 
         const res = await fetch('/api/sync?email=' + encodeURIComponent(email), {
-          headers: { 'x-api-secret': 'propedge_secret_2026' }
+          headers: { 'x-api-secret': 'zorvo_secret_2026' }
         });
         if (res.ok) {
           const data = await res.json();
@@ -6799,7 +6799,7 @@
         }
         fetch('/api/sync', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ email: email, data: payload })
         }).catch(e => { });
       } catch (e) { }
@@ -6979,7 +6979,7 @@
 
         // 4. Integrations check
         fetch('/api/integration-status?email=' + state.agent.email, {
-          headers: { 'x-api-secret': 'propedge_secret_2026' }
+          headers: { 'x-api-secret': 'zorvo_secret_2026' }
         })
           .then(r => r.json())
           .then(intRes => {
@@ -7006,7 +7006,7 @@
       if (e.data === 'google_connected') {
         toast('Google Calendar Connected Successfully!');
         const updatedStatus = await fetch('/api/integration-status?email=' + state.agent.email, {
-          headers: { 'x-api-secret': 'propedge_secret_2026' }
+          headers: { 'x-api-secret': 'zorvo_secret_2026' }
         }).then(r => r.json());
         state.integrations = {
           google: { connected: !!updatedStatus.google }
@@ -8079,7 +8079,7 @@
         try {
           await fetch('/api/visits', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
             body: JSON.stringify({ agentEmail: state.agent.email, visit: saved })
           });
           sendAgentAlert('Property Visit Scheduled', `You have a new tour with <b>${name}</b> for <b>${saved.property_name}</b> on ${date} at ${time}.`);
@@ -8098,7 +8098,7 @@
       try {
         const res = await fetch('/api/visits/' + id, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ agentEmail: state.agent.email, updates: { status } })
         });
         const data = await res.json();
@@ -8125,7 +8125,7 @@
       try {
         const res = await fetch(`/api/visits/${id}?agentEmail=${encodeURIComponent(state.agent.email)}`, {
           method: 'DELETE',
-          headers: { 'x-api-secret': 'propedge_secret_2026' }
+          headers: { 'x-api-secret': 'zorvo_secret_2026' }
         });
         const data = await res.json();
         if (data.success) {
@@ -8149,7 +8149,7 @@
       // Sync to API
       fetch('/api/visits/' + id, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
         body: JSON.stringify({ agentEmail: state.agent.email, updates: { outcome, status: 'completed' } })
       }).catch(e => { });
 
@@ -8499,7 +8499,7 @@
           if (recipients.length > 0) {
             fetch('/api/sms/blast', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
               body: JSON.stringify({ recipients, message: msg })
             }).catch(e => console.error('SMS Blast failed:', e));
           }
@@ -9906,7 +9906,7 @@ ${date}`;
       try {
         const res = await fetch('/api/ai/description', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ details })
         });
         const data = await res.json();
@@ -11205,7 +11205,7 @@ ${date}`;
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-secret': 'propedge_secret_2026'
+            'x-api-secret': 'zorvo_secret_2026'
           },
           body: JSON.stringify({
             to: state.agent.email || 'saishivaraju.m2002@gmail.com',
@@ -11234,7 +11234,7 @@ ${date}`;
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'x-api-secret': 'propedge_secret_2026'
+            'x-api-secret': 'zorvo_secret_2026'
           },
           body: JSON.stringify({
             to: visit.client_email,
@@ -11300,7 +11300,7 @@ ${date}`;
           try {
             const res = await fetch('/api/documents', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+              headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
               body: JSON.stringify({
                 doc_type: docType,
                 file_name: file.name,
@@ -11342,7 +11342,7 @@ ${date}`;
       if (statusEl) statusEl.textContent = 'Loading...';
       try {
         const res = await fetch('/api/documents', {
-          headers: { 'x-api-secret': 'propedge_secret_2026' }
+          headers: { 'x-api-secret': 'zorvo_secret_2026' }
         });
         const data = await res.json();
         allDocs = data.data || [];
@@ -11362,7 +11362,7 @@ ${date}`;
     async function loadAgreements() {
       try {
         const res = await fetch('/api/all-agreements', {
-          headers: { 'x-api-secret': 'propedge_secret_2026' }
+          headers: { 'x-api-secret': 'zorvo_secret_2026' }
         });
         const data = await res.json();
         allAgreements = data.data || [];
@@ -11496,7 +11496,7 @@ ${date}`;
         try {
           const res = await fetch('/api/documents', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+            headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
             body: JSON.stringify(doc)
           });
           const result = await res.json();
@@ -11636,7 +11636,7 @@ ${date}`;
       try {
         const res = await fetch('/api/ai/pitch', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
           body: JSON.stringify({ lead, properties: state.properties })
         });
         const data = await res.json();
