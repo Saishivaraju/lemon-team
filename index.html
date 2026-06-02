@@ -2984,7 +2984,10 @@
         if (res.ok) {
           const data = await res.json();
           if (Object.keys(data).length > 0) {
-            for (const key in data) { localStorage.setItem(key, data[key]); }
+            for (const key in data) {
+              if (key === 'pe_session' || key === 'pe_access' || key === 'pe_agent') continue;
+              localStorage.setItem(key, data[key]);
+            }
           }
         }
       } catch (e) { }
@@ -2996,7 +2999,9 @@
         const payload = {};
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key.startsWith('pe_')) payload[key] = localStorage.getItem(key);
+          if (key.startsWith('pe_') && key !== 'pe_session' && key !== 'pe_access' && key !== 'pe_agent') {
+            payload[key] = localStorage.getItem(key);
+          }
         }
         fetch('/api/sync', {
           method: 'POST',
