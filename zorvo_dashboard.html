@@ -4185,9 +4185,9 @@
         overflow: visible;
       }
 
-      /* KPI stats: 1-column grid */
+      /* KPI stats: 2-column grid for mobile */
       .stats-grid {
-        grid-template-columns: 1fr !important;
+        grid-template-columns: repeat(2, 1fr) !important;
         gap: 12px !important;
       }
 
@@ -4286,11 +4286,16 @@
       }
 
       .modal {
-        width: 95%;
+        width: 95% !important;
         padding: 15px;
         max-height: 92vh;
         overflow-y: auto;
       }
+      
+      .ld-flex-col { flex-direction: column !important; }
+      .camp-btn-row { flex-wrap: wrap !important; }
+      .camp-stat-row { flex-wrap: wrap !important; }
+      .camp-stat-row > div { margin-bottom: 8px; flex: 1 1 45%; }
 
       .btn {
         padding: 10px 15px;
@@ -5107,9 +5112,9 @@
 
         <!-- AI CAMPAIGN SECTION -->
         <div id="campaign-panel" class="card" style="margin-bottom: 24px; border-color: var(--green);">
-          <div class="card-header" style="background: rgba(46, 204, 138, 0.1);">
+          <div class="card-header camp-btn-row" style="background: rgba(46, 204, 138, 0.1);">
             <div class="card-title"><i class="fas fa-robot"></i> AI Campaign</div>
-            <div style="display:flex; gap:10px;">
+            <div class="camp-btn-row" style="display:flex; gap:10px;">
               <button class="btn btn-ghost btn-sm" onclick="toggleSelectAll(true)">Select All</button>
               <button class="btn btn-ghost btn-sm" onclick="selectHotLeads()">Select Hot</button>
               <button class="btn btn-ghost btn-sm" onclick="selectNewLeads()">Select New</button>
@@ -5119,12 +5124,12 @@
             </div>
           </div>
           <div class="card-body">
-            <div style="display:flex; justify-content:space-between; margin-bottom: 16px;">
+            <div class="camp-btn-row" style="display:flex; justify-content:space-between; margin-bottom: 16px;">
               <div>Selected Leads: <span id="camp-selected-count" style="font-weight:bold;color:var(--text);">0</span></div>
               <div>Campaign Status: <span id="camp-status" style="font-weight:bold;color:var(--accent);">Idle</span></div>
               <div>Calls Completed: <span id="camp-calls-completed" style="font-weight:bold;color:var(--text);">0</span></div>
             </div>
-            <div style="display:flex; justify-content:space-between; margin-bottom: 16px; font-size:13px; color:var(--muted);">
+            <div class="camp-stat-row" style="display:flex; justify-content:space-between; margin-bottom: 16px; font-size:13px; color:var(--muted);">
               <div>🔥 Hot Leads: <span id="camp-hot">0</span></div>
               <div>🟡 Follow Ups: <span id="camp-followup">0</span></div>
               <div>📞 Transferred: <span id="camp-transferred">0</span></div>
@@ -6369,8 +6374,8 @@
   </div>
 
   <div class="modal-overlay" id="modal-leadDetail">
-    <div class="modal" style="width:700px">
-      <div class="modal-title" style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="modal" style="width:100%; max-width:700px">
+      <div class="modal-title camp-btn-row" style="display:flex; justify-content:space-between; align-items:center;">
         <span id="ld-title" style="font-size:24px;">Lead Details</span>
         <div style="display:flex; gap:10px;">
           <span id="ld-badge" class="badge"></span>
@@ -6379,7 +6384,7 @@
       </div>
       <div class="modal-close" onclick="closeModal('leadDetail')">&#10005;</div>
       
-      <div style="margin-top:20px; display:flex; gap:20px;">
+      <div class="ld-flex-col" style="margin-top:20px; display:flex; gap:20px;">
         <div style="flex:1;">
           <div style="font-weight:bold; margin-bottom:5px; color:var(--muted); font-size:12px; text-transform:uppercase;">Lead Information</div>
           <div style="background:var(--surface2); padding:12px; border-radius:8px; border:1px solid var(--border); font-size:14px; margin-bottom:20px;">
