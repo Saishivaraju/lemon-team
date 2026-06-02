@@ -5121,6 +5121,7 @@
               <button class="btn btn-primary btn-sm" onclick="startSelectedAICampaign()"><i class="fas fa-play"></i> Start Campaign</button>
               <button class="btn btn-ghost btn-sm" onclick="pauseAICampaign()"><i class="fas fa-pause"></i> Pause</button>
               <button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="stopAICampaign()"><i class="fas fa-stop"></i> Stop</button>
+              <button class="btn btn-ghost btn-sm" style="color:var(--muted); border:1px solid var(--border);" onclick="resetCampaignStats()"><i class="fas fa-rotate-left"></i> Reset Stats</button>
             </div>
           </div>
           <div class="card-body">
@@ -11066,6 +11067,12 @@ ${date}`;
       DB.set('pe_campaign_queue', []);
       renderCampaignStatus();
       toast('Campaign stopped.');
+    }
+    
+    function resetCampaignStats() {
+      DB.set('pe_campaign_stats', { callsCompleted: 0, hotLeads: 0, followUps: 0, transferred: 0, noAnswer: 0 });
+      renderCampaignStatus();
+      toast('Campaign stats reset to zero.');
     }
 
     async function startSelectedAICampaign() {
