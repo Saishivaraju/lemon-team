@@ -5832,7 +5832,6 @@
           <div class="settings-nav">
             <div class="s-nav-item active" onclick="switchSettingsTab('brand', this)"><i class="fas fa-user-circle"></i> Brand & Identity</div>
             <div class="s-nav-item" onclick="switchSettingsTab('ai', this)"><i class="fas fa-robot"></i> AI & Lead Routing</div>
-            <div class="s-nav-item" onclick="switchSettingsTab('integrations', this)"><i class="fas fa-plug"></i> Integrations Hub</div>
             <div class="s-nav-item" onclick="switchSettingsTab('security', this)"><i class="fas fa-lock"></i> Security & Access</div>
           </div>
 
@@ -5901,42 +5900,7 @@
               </div>
             </div>
 
-            <!-- INTEGRATIONS TAB -->
-            <div class="s-tab-pane" id="s-tab-integrations">
-              <div class="card">
-                <div class="card-header"><div class="card-title">Active Integrations</div></div>
-                <div class="card-body" style="display:flex;flex-direction:column;gap:12px">
-                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
-                    <div style="display:flex; align-items:center; gap:16px">
-                      <i class="fas fa-microphone" style="color:var(--accent);font-size:24px;width:30px;text-align:center"></i>
-                      <div><div style="font-size:15px; font-weight:700">VAPI Voice Agent</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Handles inbound/outbound calls</div></div>
-                    </div>
-                    <div class="conn-status status-active">Connected</div>
-                  </div>
-                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
-                    <div style="display:flex; align-items:center; gap:16px">
-                      <i class="fas fa-envelope" style="color:var(--blue);font-size:24px;width:30px;text-align:center"></i>
-                      <div><div style="font-size:15px; font-weight:700">Resend Email API</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Drip campaigns & notifications</div></div>
-                    </div>
-                    <div class="conn-status status-active">Connected</div>
-                  </div>
-                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
-                    <div style="display:flex; align-items:center; gap:16px">
-                      <i class="fab fa-whatsapp" style="color:var(--green);font-size:26px;width:30px;text-align:center"></i>
-                      <div><div style="font-size:15px; font-weight:700">WhatsApp Business</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Instant client messaging</div></div>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" onclick="toast('WhatsApp API integration opening...')">Connect</button>
-                  </div>
-                  <div class="conn-item" style="display:flex;justify-content:space-between;align-items:center;padding:16px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px">
-                    <div style="display:flex; align-items:center; gap:16px">
-                      <i class="fab fa-google" style="color:#DB4437;font-size:22px;width:30px;text-align:center"></i>
-                      <div><div style="font-size:15px; font-weight:700">Google Calendar</div><div style="font-size:12px;color:var(--muted);margin-top:2px">Sync property visits</div></div>
-                    </div>
-                    <button class="btn btn-ghost btn-sm" onclick="toast('Connecting Google Calendar...')">Connect</button>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <!-- INTEGRATIONS TAB REMOVED -->
 
             <!-- SECURITY TAB -->
             <div class="s-tab-pane" id="s-tab-security">
