@@ -2276,7 +2276,20 @@
     }
 
     .dash-grid.triple {
-      grid-template-columns: 1fr 1fr 1fr
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .dash-grid-command {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .dash-panel-card {
+      height: 600px;
+      display: flex;
+      flex-direction: column;
     }
 
     .card {
@@ -4249,10 +4262,15 @@
         flex-shrink: 0;
         align-self: center;
       }
+      
+      .dash-panel-card {
+        height: 400px !important;
+      }
 
       /* All major grids → 1 column */
       .dash-grid,
       .dash-grid.triple,
+      .dash-grid-command,
       .prop-grid,
       .pipe-cols,
       .mkt-grid,
@@ -4905,10 +4923,10 @@
         </div>
 
         <!-- MAIN GRID: INBOX + KANBAN + AI INSIGHTS -->
-        <div style="display:grid; grid-template-columns:1fr 2fr 1fr; gap:20px; margin-top:20px;">
+        <div class="dash-grid-command">
           
           <!-- LEFT: Inbox / Action Plan -->
-          <div class="card" style="height:600px; display:flex; flex-direction:column;">
+          <div class="card dash-panel-card">
             <div class="card-header" style="position:sticky; top:0; background:var(--bg-light); z-index:1; display:flex; justify-content:space-between; align-items:center;">
               <div class="card-title"><i class="fas fa-inbox"></i> Priority Inbox</div>
             </div>
@@ -4930,7 +4948,7 @@
           </div>
 
           <!-- CENTER: Dashboard Pipeline Kanban -->
-          <div class="card" style="height:600px; display:flex; flex-direction:column;">
+          <div class="card dash-panel-card">
             <div class="card-header" style="position:sticky; top:0; background:var(--bg-light); z-index:1; display:flex; justify-content:space-between; align-items:center;">
               <div class="card-title"><i class="fas fa-bolt"></i> Active Pipeline</div>
               <button class="btn btn-primary btn-sm" onclick="showPanel('pipeline',document.querySelector('.nav-item:nth-child(3)'))">Full View</button>
@@ -4952,7 +4970,7 @@
           </div>
 
           <!-- RIGHT: AI Insights Whispers -->
-          <div class="card" style="height:600px; display:flex; flex-direction:column; border-color:rgba(46,204,138,0.3);">
+          <div class="card dash-panel-card" style="border-color:rgba(46,204,138,0.3);">
             <div class="card-header" style="background:rgba(46,204,138,0.05);">
               <div class="card-title"><i class="fas fa-brain" style="color:var(--green);"></i> Zorvo AI Insights</div>
             </div>
