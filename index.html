@@ -2605,7 +2605,7 @@
       <div class="lm-success" id="lm-success">
         <div class="lm-success-icon"><i class="fas fa-sparkles"></i></div>
         <div class="lm-success-text">Welcome back, <span id="lm-welcome-name">Agent</span></div>
-        <button class="lm-dash-btn" onclick="window.location.href='/zorvo_dashboard.html'">Open Dashboard <i
+        <button class="lm-dash-btn" onclick="window.location.href='zorvo_dashboard.html'">Open Dashboard <i
             class="fas fa-arrow-right"></i></button>
       </div>
     </div>
@@ -3327,7 +3327,7 @@
       if (!lmWrap) return;
       // If already logged in, redirect directly to dashboard
       if (checkSession()) {
-        window.location.href = '/zorvo_dashboard.html';
+        window.location.href = 'zorvo_dashboard.html';
         return;
       } else {
         document.getElementById('lm-form').style.display = 'block';
