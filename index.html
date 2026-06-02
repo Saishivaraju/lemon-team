@@ -2988,46 +2988,28 @@
 
     async function syncFromDB() {
       try {
-        const creds = JSON.parse(localStorage.getItem('pe_access') || 'null');
-        const email = creds ? creds.username : 'saishivaraju.m2002@gmail.com';
+        const email = 'saishivaraju.m2002@gmail.com';
         const ctrl = new AbortController();
         const timer = setTimeout(() => ctrl.abort(), 3000);
         const res = await fetch('/api/sync?email=' + encodeURIComponent(email), {
-          headers: { 'x-api-secret': 'propedge_secret_2026' },
+          headers: { 'x-api-secret': 'zorvo_secret_2026' },
           signal: ctrl.signal
         });
         clearTimeout(timer);
         if (res.ok) {
           const data = await res.json();
           if (Object.keys(data).length > 0) {
-            for (const key in data) {
-              if (key === 'pe_session' || key === 'pe_access' || key === 'pe_agent') continue;
-              localStorage.setItem(key, data[key]);
-            }
+            if (data['pe_properties']) localStorage.setItem('pe_properties', typeof data['pe_properties'] === 'string' ? data['pe_properties'] : JSON.stringify(data['pe_properties']));
+            if (data['pe_agent']) localStorage.setItem('pe_agent', typeof data['pe_agent'] === 'string' ? data['pe_agent'] : JSON.stringify(data['pe_agent']));
           }
         }
       } catch (e) { }
     }
     function syncToDB() {
-      try {
-        const creds = JSON.parse(localStorage.getItem('pe_access') || 'null');
-        const email = creds ? creds.username : 'saishivaraju.m2002@gmail.com';
-        const payload = {};
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key.startsWith('pe_') && key !== 'pe_session' && key !== 'pe_access' && key !== 'pe_agent') {
-            payload[key] = localStorage.getItem(key);
-          }
-        }
-        fetch('/api/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'propedge_secret_2026' },
-          body: JSON.stringify({ email: email, data: payload })
-        }).catch(e => { });
-      } catch (e) { }
+      /* Security Fix: Public site should NEVER overwrite the dashboard backend */
     }
 
-    function di(k, r) { var a = da(k); r.id = r.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)); r.created_at = new Date().toISOString(); a.unshift(r); try { localStorage.setItem(k, JSON.stringify(a)); syncToDB(); } catch (e) { } return r; }
+    function di(k, r) { var a = da(k); r.id = r.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)); r.created_at = new Date().toISOString(); a.unshift(r); try { localStorage.setItem(k, JSON.stringify(a)); } catch (e) { } return r; }
     var agent = {}, props = [], cf = 'all', mImgs = [], mIdx = 0, mapInited = false, sm = null;
     async function init() {
       syncFromDB().catch(() => { }); // non-blocking background sync
