@@ -2292,6 +2292,39 @@
       flex-direction: column;
     }
 
+    .launch-btn {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+    .launch-btn:hover {
+      background: rgba(255,255,255,0.08);
+      transform: translateY(-3px);
+      border-color: rgba(255,255,255,0.2);
+    }
+    .launch-btn:active {
+      transform: scale(0.96);
+    }
+    .launch-btn .l-icon {
+      width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px;
+    }
+    .launch-btn .l-icon.blue { background: rgba(64,144,240,0.1); color: var(--blue); }
+    .launch-btn .l-icon.accent { background: rgba(240,192,64,0.1); color: var(--accent); }
+    .launch-btn .l-icon.green { background: rgba(46,204,138,0.1); color: var(--green); }
+    .launch-btn .l-icon.yellow { background: rgba(224,120,48,0.1); color: var(--accent2); }
+    .launch-btn .l-text {
+      font-size: 12px; font-weight: 700; color: var(--text); letter-spacing: 0.3px;
+    }
+
     .card {
       background: rgba(13, 18, 27, 0.5);
       backdrop-filter: blur(20px);
@@ -4942,27 +4975,33 @@
             </div>
           </div>
 
-          <!-- RIGHT: Recent Leads / Action Items -->
+          <!-- RIGHT: Quick Access Launchpad -->
           <div class="card">
             <div class="card-header">
-              <div class="card-title"><i class="fas fa-inbox"></i> Recent Leads</div>
-              <span style="font-size:12px;color:var(--accent);cursor:pointer" onclick="showPanel('leads',null)">View CRM →</span>
+              <div class="card-title"><i class="fas fa-rocket"></i> Quick Launchpad</div>
             </div>
-            <div class="card-body" style="padding:0">
-              <div class="table-responsive-container">
-                <table class="table" style="margin:0">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Status</th>
-                      <th>Score</th>
-                    </tr>
-                  </thead>
-                  <tbody id="d-leads-tbody">
-                     <!-- Populated via JS -->
-                  </tbody>
-                </table>
+            <div class="card-body" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; padding:20px">
+              
+              <div class="launch-btn" onclick="showPanel('leads', document.querySelector('.nav-item:nth-child(2)'))">
+                <div class="l-icon blue"><i class="fas fa-users"></i></div>
+                <div class="l-text">CRM Leads</div>
               </div>
+              
+              <div class="launch-btn" onclick="showPanel('pipeline', document.querySelector('.nav-item:nth-child(3)'))">
+                <div class="l-icon accent"><i class="fas fa-bolt"></i></div>
+                <div class="l-text">Pipeline</div>
+              </div>
+              
+              <div class="launch-btn" onclick="showPanel('properties', document.querySelector('.nav-item:nth-child(5)'))">
+                <div class="l-icon green"><i class="fas fa-house"></i></div>
+                <div class="l-text">Properties</div>
+              </div>
+              
+              <div class="launch-btn" onclick="showPanel('bookings', document.querySelector('.nav-item:nth-child(8)'))">
+                <div class="l-icon yellow"><i class="fas fa-calendar-alt"></i></div>
+                <div class="l-text">Schedule</div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -7163,11 +7202,6 @@
       if (chartEl) {
         chartEl.innerHTML = days.map((d, i) => `<div class="bar-wrap"><div class="bar" style="height:${(counts[i] / mx * 85 + 5)}%;background:var(--accent);opacity:${i === 6 ? 1 : 0.6}"></div><div class="bar-label">${d.label}</div></div>`).join('');
       }
-
-      // Recent leads (show source badge)
-      const sc = s => s >= 80 ? 'score-h' : s >= 50 ? 'score-m' : 'score-l';
-      const bc = { 'New': 'badge-new', 'Contacted': 'badge-contacted', 'Closed': 'badge-closed' };
-      document.getElementById('d-leads-tbody').innerHTML = state.leads.slice(0, 6).map(l => `<tr onclick="viewLead('${l.id}')" style="cursor:pointer"><td style="font-weight:600">${l.name}</td><td><span class="badge ${bc[l.status] || ''}">${l.status}</span></td><td><span class="score ${sc(l.score)}">${l.score || 50}</span></td></tr>`).join('') || '<tr><td colspan="3" class="table-empty">No leads yet</td></tr>';
 
       // Today's visits
       const todayVisits = state.bookings.filter(b => b.visit_date === today);
