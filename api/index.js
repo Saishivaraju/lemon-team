@@ -2932,20 +2932,142 @@ Please check the market and contact them within 5 hours.
         });
       }
 
-      // ── send_booking_link — AI sends booking page link ────────────
+      // ── send_booking_link — AI sends rich booking email with direct property link ────────────
       if (fnName === 'send_booking_link') {
-        console.log(`[TOOL] send_booking_link → to ${phone}`);
-        
+        const { property_name } = fnArgs;
+        console.log(`[TOOL] send_booking_link → to ${phone}, property: ${property_name}`);
+
         try {
-          const link = process.env.BASE_URL;
-          if (phone) await sendSMSText(phone, `Hi, you can book your property visit here: ${link}`);
-          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, { booking_link_sent: true });
+          const BASE = process.env.BASE_URL || 'https://lemon-mocha.vercel.app';
+          const companyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+
+          // Try to find the specific property to link directly to its page
+          let propId = '';
+          let propDetails = null;
+          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+          if (snap?.data?.pe_properties) {
+            const props = typeof snap.data.pe_properties === 'string'
+              ? JSON.parse(snap.data.pe_properties)
+              : snap.data.pe_properties;
+            const p = props.find(x =>
+              x.name && property_name && x.name.toLowerCase().includes(property_name.toLowerCase())
+            ) || props[0];
+            if (p) { propId = p.id; propDetails = p; }
+          }
+
+          // Build direct link: property page with booking modal auto-open
+          const propertyPageLink = propId
+            ? `${BASE}/index.html#book-visit-${propId}`
+            : `${BASE}/index.html#book-visit`;
+          const propName = propDetails?.name || property_name || 'the property';
+          const propPrice = propDetails?.price_label || propDetails?.price || '';
+          const propLocation = propDetails?.location || propDetails?.address || '';
+          const propType = propDetails?.property_type || propDetails?.type || 'Property';
+          const leadName = name || 'there';
+          const agentPhone = process.env.AGENT_PHONE || '+1 707 675 1556';
+
+          // Rich HTML booking email
+          const htmlBody = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Book Your Visit — ${companyName}</title></head>
+<body style="margin:0;padding:0;background:#0a0e14;font-family:'Segoe UI',Arial,sans-serif">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0e14;padding:24px 16px">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#111520;border-radius:16px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
+
+      <!-- HEADER -->
+      <tr><td style="background:linear-gradient(135deg,#1a1a18 0%,#0f2044 100%);padding:36px 40px 28px;border-bottom:2px solid #c5a059;text-align:center">
+        <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.35);letter-spacing:3px;text-transform:uppercase">From ${companyName}</p>
+        <h1 style="margin:8px 0 0;color:#c5a059;font-size:26px;font-weight:300;letter-spacing:1px">🏡 Book Your Property Visit</h1>
+        <p style="margin:10px 0 0;color:rgba(255,255,255,0.5);font-size:14px">Your exclusive property tour is just one click away</p>
+      </td></tr>
+
+      <!-- GREETING -->
+      <tr><td style="padding:28px 40px 0">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(197,160,89,0.07);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:20px">
+          <tr><td>
+            <p style="margin:0 0 6px;font-size:18px;color:#faf8f4;font-weight:600">Hi ${leadName}! 👋</p>
+            <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.7">
+              As discussed on our call, I've sent you a direct link to book your visit for 
+              <strong style="color:#c5a059">${propName}</strong>. Just click the button below — 
+              it will take you straight to the property page where you can pick your preferred date and time instantly.
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- PROPERTY CARD -->
+      <tr><td style="padding:24px 40px 0">
+        <p style="margin:0 0 14px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">📍 Property Details</p>
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.04);border:1px solid rgba(197,160,89,0.15);border-radius:10px;padding:20px">
+          <tr><td>
+            <p style="margin:0 0 6px;font-size:20px;font-weight:700;color:#faf8f4">${propName}</p>
+            ${propType ? `<p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.45)">${propType}${propLocation ? ' · 📍 ' + propLocation : ''}</p>` : ''}
+            ${propPrice ? `<p style="margin:8px 0 0;font-size:18px;font-weight:700;color:#c5a059">${propPrice}</p>` : ''}
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- BIG CTA BUTTON -->
+      <tr><td style="padding:28px 40px">
+        <table width="100%" cellpadding="0" cellspacing="0" style="text-align:center">
+          <tr><td>
+            <p style="margin:0 0 6px;font-size:15px;color:#faf8f4;font-weight:600">Ready to book your visit?</p>
+            <p style="margin:0 0 20px;font-size:13px;color:rgba(255,255,255,0.45)">Pick your preferred date and time — zero pressure, completely free</p>
+            <a href="${propertyPageLink}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:16px 44px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700;letter-spacing:1px">
+              📅 Book My Visit Now →
+            </a>
+            <p style="margin:16px 0 0;font-size:12px;color:rgba(255,255,255,0.3)">Or paste this link in your browser:<br>
+              <a href="${propertyPageLink}" style="color:#c5a059;text-decoration:none">${propertyPageLink}</a>
+            </p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- AGENT SIGN-OFF -->
+      <tr><td style="padding:0 40px 32px">
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid rgba(197,160,89,0.15);padding-top:24px">
+          <tr><td>
+            <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">Your Personal Agent</p>
+            <p style="margin:0 0 4px;font-size:17px;font-weight:700;color:#faf8f4">👤 ${AGENT_NAME}</p>
+            <p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.5)">📞 <a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">${agentPhone}</a></p>
+            <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">📧 <a href="mailto:${AGENT_EMAIL}" style="color:#c5a059;text-decoration:none">${AGENT_EMAIL}</a></p>
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- FOOTER -->
+      <tr><td style="background:rgba(0,0,0,0.3);padding:16px 40px;text-align:center;border-top:1px solid rgba(255,255,255,0.05)">
+        <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2)">© ${new Date().getFullYear()} ${companyName} · <a href="${BASE}" style="color:rgba(255,255,255,0.3);text-decoration:none">Visit Website</a></p>
+      </td></tr>
+
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
+
+          // Resolve lead email
+          const leadEmailAddr = email || await getLeadEmail(leadId, phone);
+          if (leadEmailAddr) {
+            await sendEmail({
+              to: leadEmailAddr,
+              subject: `📅 Book Your Visit for ${propName} — ${companyName}`,
+              message: `Hi ${leadName},\n\nAs discussed on our call, here is your direct booking link for ${propName}:\n${propertyPageLink}\n\nSimply click the link and pick your preferred date and time.\n\n${AGENT_NAME}\n${agentPhone}\n${companyName}`,
+              html: htmlBody
+            });
+            console.log(`✅ Booking email sent to ${leadEmailAddr} for property: ${propName}`);
+          } else {
+            console.warn(`⚠️  No email found for lead ${phone} — booking email skipped`);
+          }
+
+          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, { booking_link_sent: true, booking_email_sent: true });
         } catch(e) {
           console.error('[TOOL] send_booking_link error:', e.message);
         }
 
         return res.json({
-          results: [{ toolCallId: toolCallId, result: 'Booking link sent successfully. Inform the user.' }],
+          results: [{ toolCallId: toolCallId, result: `Booking email sent to the lead with a direct link to open the property page and book their visit. Tell the lead: "I have just sent you an email with a direct booking link. Simply click the big gold button in the email to pick your preferred date and time. It will take you straight to the property page!"` }],
           success: true
         });
       }

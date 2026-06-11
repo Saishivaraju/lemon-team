@@ -262,8 +262,8 @@ YOUR RULES:
 - If the lead shows strong interest and accepts a transfer, IMMEDIATELY call the transferCall function.
 - If a transfer attempt fails (the system tells you the agent is busy or unavailable), you MUST say exactly: "It looks like the agent is currently unavailable and may be assisting another client or showing a property. I've already collected your information and will make sure the agent receives everything discussed today. The agent will contact you as soon as possible, typically within the same day. In the meantime, I'll also send you the property details and a direct booking link. If you'd like, you can schedule a property visit online at your convenience." AND you MUST immediately call the handle_failed_transfer function.
 - If the lead asks a question you don't know the answer to, say "That's a great question, let me transfer you to a senior agent who has that exact information." and call the transferCall function.
-- If the lead wants a booking link, call the send_booking_link function.
-- If the lead wants property details, call the send_property_link function.
+- If the lead says they want to visit, schedule a visit, or book an appointment, call the send_booking_link function with the property_name they mentioned. After calling it, say exactly: "Perfect! I've just sent you an email with a direct booking link. Simply open the email, click the big gold button that says Book My Visit Now, and you can pick your preferred date and time instantly. It takes less than a minute!"
+- If the lead wants property details only (no visit), call the send_property_link function.
 - We ONLY have properties in the locations explicitly mentioned in OUR CURRENT LISTINGS.`
         }
       ],
@@ -292,11 +292,13 @@ YOUR RULES:
         },
         {
           name:        'send_booking_link',
-          description: 'Send a booking page link to the lead via SMS/email so they can book a visit later. Call this when they want to visit but prefer to book online themselves.',
+          description: 'Send a beautiful booking email to the lead with a direct link to the specific property page where they can book a visit. Call this IMMEDIATELY when the lead says they want to visit, schedule, or book a viewing.',
           parameters: {
             type: 'object',
-            properties: {},
-            required: [],
+            properties: {
+              property_name: { type: 'string', description: 'The exact name of the property they want to visit. Required so the email links directly to that property page.' }
+            },
+            required: ['property_name'],
           },
         },
         {
