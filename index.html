@@ -3854,7 +3854,55 @@
       startBookingFlow(pName);
     }
 
+    // ── Deep Link Handler: email buttons open booking modal directly ──────────
+    // Handles URLs like:
+    //   index.html#book-visit          → opens booking for first property
+    //   index.html#book-visit-[id]     → opens booking for specific property by ID
+    //   index.html#property-[id]       → scrolls to / opens that property card
+    function handleDeepLink() {
+      const hash = window.location.hash;
+      if (!hash) return;
+
+      // #book-visit or #book-visit-[propertyId]
+      if (hash.startsWith('#book-visit')) {
+        const propId = hash.replace('#book-visit-', '').replace('#book-visit', '').trim();
+        let propName = 'Selected Property';
+
+        if (propId) {
+          // Find property by ID in local store
+          const found = props.find(p => String(p.id) === String(propId));
+          if (found) propName = found.name;
+        } else if (props.length > 0) {
+          propName = props[0].name;
+        }
+
+        // Small delay so page renders fully before modal opens
+        setTimeout(() => {
+          startBookingFlow(propName);
+          // Clean the hash so refresh doesn't re-open the modal
+          history.replaceState(null, '', window.location.pathname);
+        }, 600);
+        return;
+      }
+
+      // #property-[propertyId] → open property detail modal
+      if (hash.startsWith('#property-')) {
+        const propId = hash.replace('#property-', '').trim();
+        if (propId) {
+          const found = props.find(p => String(p.id) === String(propId));
+          if (found) {
+            setTimeout(() => {
+              om(JSON.stringify(found));
+              history.replaceState(null, '', window.location.pathname);
+            }, 600);
+          }
+        }
+      }
+    }
+
     init();
+    // Run deep link handler after init() loads all props
+    handleDeepLink();
   </script>
 </body>
 
