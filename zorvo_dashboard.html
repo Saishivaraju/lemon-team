@@ -11825,7 +11825,16 @@ ${date}`;
         for (const leadId of selectedOptions) {
           const lead = state.leads.find(l => l.id === leadId);
           if (!lead) continue;
-          if (!lead.email) { failCount++; continue; }
+          if (!lead.email) { failCount++; toast(`⚠️ ${lead.name || leadId} has no email — skipped`, true); continue; }
+
+          // Basic email format validation — catch typos like 'gmail.come'
+          const emailOk = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(lead.email.trim());
+          if (!emailOk) {
+            failCount++;
+            toast(`⚠️ Invalid email for ${lead.name}: "${lead.email}" — fix the email first`, true);
+            console.warn(`[FOLLOWUP] Skipping ${lead.name} — invalid email: ${lead.email}`);
+            continue;
+          }
 
           // Build property cards HTML with correct site URL
           const propCards = props.length ? props.map((p, i) => {
