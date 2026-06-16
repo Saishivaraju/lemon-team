@@ -3847,6 +3847,16 @@ app.post('/api/vapi/webhook', async (req, res) => {
         case OUTCOMES.BUSY:
           console.log(`[OUTCOME] ${callStatus} — scheduling retry for ${phone} in ${retryPolicy.retryDelayMinutes}min`);
           await robustUpdateLeadStage(finalLeadId, callStatus);
+
+          // ── Notify Agent: missed call / no answer ──────────────────────────
+          await notifyAgent(AGENT_EMAIL, {
+            title: `📵 Missed Call: ${leadMeta.name || phone}`,
+            description: `Lead did not answer the AI call.\nPhone: ${phone}\nOutcome: ${callStatus}\nRetry scheduled in ${retryPolicy.retryDelayMinutes} minutes.${leadEmail ? `\nEmail: ${leadEmail}` : ''}\n\nA "Sorry we missed you" email has been sent to the lead automatically.`,
+            type: 'warning',
+            icon: '📵',
+            emailSubject: `📵 Missed Call Alert: ${leadMeta.name || phone} did not answer`
+          });
+
           if (phone) {
             // Send 'sorry we missed you' email non-blocking
             if (leadEmail) {

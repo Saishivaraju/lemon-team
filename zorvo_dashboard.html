@@ -11802,41 +11802,83 @@ ${date}`;
       btn.disabled = true;
 
       const agent = state.agent || {};
-      const agentWebsite = agent.agency_website || 'https://www.zorvorealty.com';
-      const agentContact = `${agent.name || 'Zorvo Agent'} | ${agent.phone || ''} | ${agent.email || ''}`;
+      const agentName = agent.name || 'Zorvo Agent';
+      const agentPhone = agent.phone || '';
+      const agentEmail = agent.email || '';
+      const companyName = agent.agency_name || 'Zorvo Realty';
+      const baseUrl = window.location.origin;
+      const secret = (DB.get('pe_access') || {}).password || 'zorvo_secret_2026';
 
-      const recentProps = state.properties.slice(0, 3);
-      let propertyText = '';
-      if (recentProps.length > 0) {
-        propertyText = 'Check out our latest property listings:\n\n' + recentProps.map(p => `- ${p.name}: $${fmtNum(p.price)} - ${p.location}`).join('\n');
-      }
+      const props = (state.properties || []).filter(p =>
+        ['available', 'Available', 'active', 'Active'].includes(p.status) || !p.status
+      ).slice(0, 5);
 
-      const subject = 'Your Personalized Property Update from Zorvo';
+      const subject = '🏡 Your Personalized Property Update — ' + companyName;
 
       try {
         let sentCount = 0;
+        let failCount = 0;
         for (const leadId of selectedOptions) {
           const lead = state.leads.find(l => l.id === leadId);
-          if (lead && lead.email) {
-            const message = `Hi ${lead.name.split(' ')[0]},\n\nI hope you're doing well! We have some new updates that might match your criteria.\n\n${propertyText}\n\nVisit our website to see more: ${agentWebsite}\n\nBest Regards,\n${agentContact}`;
+          if (!lead) continue;
+          if (!lead.email) { failCount++; continue; }
 
-            await fetch('/api/email', {
+          // Build property cards HTML
+          const propCards = props.length ? props.map((p, i) => {
+            const link = `${baseUrl}/index.html#property-${p.id || (i + 1)}`;
+            const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name || 'Property') + ' ' + (p.location || ''))}`;
+            return `<tr><td style="padding:12px 0;border-bottom:1px solid rgba(197,160,89,0.12)">
+              <p style="margin:0 0 3px;font-size:14px;font-weight:700;color:#faf8f4">${p.name || p.title || 'Property'}</p>
+              <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.45)">${p.property_type || 'Property'} · 📍 ${p.location || 'Prime Location'}</p>
+              <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#c5a059">${p.price_label || ('$' + p.price) || 'Contact for Price'}</p>
+              <a href="${link}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:6px 14px;border-radius:4px;text-decoration:none;font-size:11px;font-weight:700;margin-right:6px">View →</a>
+              <a href="${maps}" style="display:inline-block;border:1px solid rgba(197,160,89,0.4);color:#c5a059;padding:6px 10px;border-radius:4px;text-decoration:none;font-size:11px">📍 Map</a>
+            </td></tr>`;
+          }).join('') : `<tr><td style="color:rgba(255,255,255,0.4);padding:12px 0">Visit our website to browse all available properties.</td></tr>`;
+
+          const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
+            <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:28px 36px;border-bottom:2px solid #c5a059;text-align:center">
+              <h2 style="margin:0;color:#c5a059;font-weight:300;font-size:22px">🏡 Property Follow-Up</h2>
+              <p style="margin:8px 0 0;color:rgba(255,255,255,0.45);font-size:13px">${companyName}</p>
+            </div>
+            <div style="padding:28px 36px">
+              <p style="color:#faf8f4;font-size:15px">Hi <strong>${lead.name ? lead.name.split(' ')[0] : 'there'}</strong>! 👋</p>
+              <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.7">I'm following up on your interest in ${lead.property_interest ? `<strong style="color:#c5a059">${lead.property_interest}</strong>` : 'our properties'}${lead.budget ? ` within your <strong style="color:#c5a059">${lead.budget}</strong> budget` : ''}. Here are our top available listings:</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">${propCards}</table>
+              <div style="text-align:center;margin:20px 0">
+                <a href="${baseUrl}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:700;font-size:14px">Browse All Properties →</a>
+              </div>
+              <hr style="border:none;border-top:1px solid rgba(197,160,89,0.15);margin:20px 0">
+              <p style="margin:0 0 3px;font-size:13px;color:rgba(255,255,255,0.5)">👤 <strong style="color:#faf8f4">${agentName}</strong></p>
+              <p style="margin:0 0 3px;font-size:13px"><a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">📞 ${agentPhone}</a></p>
+              <p style="margin:0;font-size:13px"><a href="mailto:${agentEmail}" style="color:#c5a059;text-decoration:none">📧 ${agentEmail}</a></p>
+            </div>
+          </div>`;
+
+          const message = `Hi ${lead.name ? lead.name.split(' ')[0] : 'there'},\n\nFollowing up on your interest in ${lead.property_interest || 'our properties'}.\n\nBrowse all listings: ${baseUrl}\n\n${agentName}\n${agentPhone}\n${agentEmail}`;
+
+          try {
+            const res = await fetch('/api/email', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ to: lead.email, subject, message })
+              headers: { 'Content-Type': 'application/json', 'x-api-secret': secret },
+              body: JSON.stringify({ to: lead.email, subject, html, message })
             });
-            sentCount++;
-          }
+            const data = await res.json();
+            if (data.success) sentCount++;
+            else { failCount++; console.warn('Follow-up email failed for', lead.email, data.error); }
+          } catch (e) { failCount++; console.error('Email send error for', lead.email, e.message); }
         }
 
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to Selected Leads';
         btn.disabled = false;
 
-        toast(`Successfully sent follow-up to ${sentCount} lead(s)! 📧`);
+        if (sentCount > 0 && failCount === 0) toast(`✅ Follow-up email sent to ${sentCount} lead(s)! 📧`);
+        else if (sentCount > 0) toast(`📧 Sent to ${sentCount} lead(s). ${failCount} failed (no email?).`);
+        else toast(`❌ No emails sent. ${failCount} lead(s) missing email address.`, true);
       } catch (err) {
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to Selected Leads';
         btn.disabled = false;
-        toast('Connection error', true);
+        toast('Connection error: ' + err.message, true);
       }
     }
 
