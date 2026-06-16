@@ -12,7 +12,7 @@
     },
     {
       "path": "/api/cron/retries",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
