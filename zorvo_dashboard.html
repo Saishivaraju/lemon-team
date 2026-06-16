@@ -5632,17 +5632,15 @@
               <div class="card-title"><i class="fas fa-paper-plane"></i> Mass Follow-Up (Email)</div>
             </div>
             <div class="card-body">
-              <p style="font-size:12px; color:var(--muted); margin-bottom:15px">Select multiple leads to send an instant
-                follow-up email. The email will automatically include your website, contact details, and a short
-                description of new property listings.</p>
+              <p style="font-size:12px; color:var(--muted); margin-bottom:15px">Select one or more leads to send a personalized follow-up email instantly. Only leads with an email address are shown below. The email includes your property listings, site link, and agent contact details.</p>
               <div style="display:grid; grid-template-columns:1fr; gap:15px; margin-bottom:20px">
                 <div>
-                  <label class="form-label">Select Leads (Hold Ctrl/Cmd to select multiple)</label>
-                  <select id="manual-followup-lead-select" class="form-input" multiple style="height:120px"></select>
+                  <label class="form-label">Select Leads to Email <span style="color:var(--accent);font-size:10px">(Hold Ctrl/Cmd for multiple · only leads with email shown)</span></label>
+                  <select id="manual-followup-lead-select" class="form-input" multiple style="height:140px;font-size:12px"></select>
                 </div>
               </div>
               <button class="btn btn-primary" onclick="sendMassFollowUp()" id="btn-manual-followup">
-                <i class="fas fa-paper-plane"></i> Send to Selected Leads
+                <i class="fas fa-paper-plane"></i> Send Follow-Up Email to Selected Leads
               </button>
             </div>
           </div>
@@ -11694,9 +11692,15 @@ ${date}`;
     function populateSmartToolsSelects() {
       const ls = state.leads.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 
+      // Follow-up dropdown: only show leads that have an email address
+      const leadsWithEmail = state.leads.filter(l => l.email && l.email.trim());
+      const followupOpts = leadsWithEmail.length
+        ? leadsWithEmail.map(l => `<option value="${l.id}">${l.name} — ${l.email}</option>`).join('')
+        : '<option value="" disabled>No leads with email found</option>';
+
       const el1 = document.getElementById('doc-lead-select'); if (el1) el1.innerHTML = '<option value="">Select Lead...</option>' + ls;
       const el2 = document.getElementById('matchmaker-lead-select'); if (el2) el2.innerHTML = '<option value="">Select Lead...</option>' + ls;
-      const el4 = document.getElementById('manual-followup-lead-select'); if (el4) el4.innerHTML = ls;
+      const el4 = document.getElementById('manual-followup-lead-select'); if (el4) el4.innerHTML = followupOpts;
 
       renderDocVault();
     }
@@ -11806,8 +11810,8 @@ ${date}`;
       const agentPhone = agent.phone || '';
       const agentEmail = agent.email || '';
       const companyName = agent.agency_name || 'Zorvo Realty';
-      const baseUrl = window.location.origin;
-      const secret = (DB.get('pe_access') || {}).password || 'zorvo_secret_2026';
+      // Always link to the public-facing site, not the dashboard URL
+      const siteUrl = 'https://lemon-mocha.vercel.app';
 
       const props = (state.properties || []).filter(p =>
         ['available', 'Available', 'active', 'Active'].includes(p.status) || !p.status
@@ -11823,50 +11827,72 @@ ${date}`;
           if (!lead) continue;
           if (!lead.email) { failCount++; continue; }
 
-          // Build property cards HTML
+          // Build property cards HTML with correct site URL
           const propCards = props.length ? props.map((p, i) => {
-            const link = `${baseUrl}/index.html#property-${p.id || (i + 1)}`;
+            const link = `${siteUrl}/index.html#property-${p.id || (i + 1)}`;
             const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name || 'Property') + ' ' + (p.location || ''))}`;
-            return `<tr><td style="padding:12px 0;border-bottom:1px solid rgba(197,160,89,0.12)">
-              <p style="margin:0 0 3px;font-size:14px;font-weight:700;color:#faf8f4">${p.name || p.title || 'Property'}</p>
-              <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.45)">${p.property_type || 'Property'} · 📍 ${p.location || 'Prime Location'}</p>
-              <p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#c5a059">${p.price_label || ('$' + p.price) || 'Contact for Price'}</p>
-              <a href="${link}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:6px 14px;border-radius:4px;text-decoration:none;font-size:11px;font-weight:700;margin-right:6px">View →</a>
-              <a href="${maps}" style="display:inline-block;border:1px solid rgba(197,160,89,0.4);color:#c5a059;padding:6px 10px;border-radius:4px;text-decoration:none;font-size:11px">📍 Map</a>
+            return `<tr><td style="padding:14px 0;border-bottom:1px solid rgba(197,160,89,0.12)">
+              <p style="margin:0 0 3px;font-size:15px;font-weight:700;color:#faf8f4">${p.name || p.title || 'Property'}</p>
+              <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.45)">${p.property_type || 'Property'} &middot; 📍 ${p.location || 'Prime Location'}</p>
+              <p style="margin:0 0 10px;font-size:16px;font-weight:700;color:#c5a059">${p.price_label || (p.price ? '$' + Number(p.price).toLocaleString() : 'Contact for Price')}</p>
+              <a href="${link}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:7px 16px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:700;margin-right:8px">View Property →</a>
+              <a href="${maps}" style="display:inline-block;border:1px solid rgba(197,160,89,0.4);color:#c5a059;padding:7px 12px;border-radius:5px;text-decoration:none;font-size:12px">📍 Map</a>
             </td></tr>`;
-          }).join('') : `<tr><td style="color:rgba(255,255,255,0.4);padding:12px 0">Visit our website to browse all available properties.</td></tr>`;
+          }).join('') : `<tr><td style="color:rgba(255,255,255,0.4);padding:16px 0;text-align:center">Visit our website to browse all available premium properties.</td></tr>`;
 
-          const html = `<div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
-            <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:28px 36px;border-bottom:2px solid #c5a059;text-align:center">
-              <h2 style="margin:0;color:#c5a059;font-weight:300;font-size:22px">🏡 Property Follow-Up</h2>
-              <p style="margin:8px 0 0;color:rgba(255,255,255,0.45);font-size:13px">${companyName}</p>
-            </div>
-            <div style="padding:28px 36px">
-              <p style="color:#faf8f4;font-size:15px">Hi <strong>${lead.name ? lead.name.split(' ')[0] : 'there'}</strong>! 👋</p>
-              <p style="color:rgba(255,255,255,0.6);font-size:14px;line-height:1.7">I'm following up on your interest in ${lead.property_interest ? `<strong style="color:#c5a059">${lead.property_interest}</strong>` : 'our properties'}${lead.budget ? ` within your <strong style="color:#c5a059">${lead.budget}</strong> budget` : ''}. Here are our top available listings:</p>
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0">${propCards}</table>
-              <div style="text-align:center;margin:20px 0">
-                <a href="${baseUrl}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:13px 32px;border-radius:6px;text-decoration:none;font-weight:700;font-size:14px">Browse All Properties →</a>
-              </div>
-              <hr style="border:none;border-top:1px solid rgba(197,160,89,0.15);margin:20px 0">
-              <p style="margin:0 0 3px;font-size:13px;color:rgba(255,255,255,0.5)">👤 <strong style="color:#faf8f4">${agentName}</strong></p>
-              <p style="margin:0 0 3px;font-size:13px"><a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">📞 ${agentPhone}</a></p>
-              <p style="margin:0;font-size:13px"><a href="mailto:${agentEmail}" style="color:#c5a059;text-decoration:none">📧 ${agentEmail}</a></p>
-            </div>
-          </div>`;
+          const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+          <body style="margin:0;padding:0;background:#0a0e14;font-family:'Segoe UI',Arial,sans-serif">
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0e14;padding:24px 16px">
+            <tr><td align="center">
+              <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#111520;border-radius:16px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
+                <tr><td style="background:linear-gradient(135deg,#1a1a18 0%,#0f2044 100%);padding:36px 40px 28px;border-bottom:2px solid #c5a059;text-align:center">
+                  <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:3px;text-transform:uppercase">From ${companyName}</p>
+                  <h1 style="margin:8px 0 0;color:#c5a059;font-size:26px;font-weight:300;letter-spacing:1px">🏡 Property Follow-Up</h1>
+                  <p style="margin:10px 0 0;color:rgba(255,255,255,0.5);font-size:14px">Curated listings selected just for you</p>
+                </td></tr>
+                <tr><td style="padding:32px 40px 0">
+                  <p style="margin:0 0 6px;font-size:18px;color:#faf8f4;font-weight:600">Hi ${lead.name ? lead.name.split(' ')[0] : 'there'}! 👋</p>
+                  <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.8">I'm following up on your interest in ${lead.property_interest ? `<strong style="color:#c5a059">${lead.property_interest}</strong>` : 'our properties'}${lead.budget ? ` within your <strong style="color:#c5a059">${lead.budget}</strong> budget` : ''}. Here are our top available listings for you:</p>
+                  <table width="100%" cellpadding="0" cellspacing="0">${propCards}</table>
+                </td></tr>
+                <tr><td style="padding:28px 40px">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:24px;text-align:center">
+                    <tr><td>
+                      <p style="margin:0 0 6px;font-size:15px;color:#faf8f4;font-weight:600">Ready to schedule a visit?</p>
+                      <p style="margin:0 0 18px;font-size:13px;color:rgba(255,255,255,0.45)">Browse all our premium listings and book your free property tour</p>
+                      <a href="${siteUrl}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:1px">Browse All Properties →</a>
+                      <p style="margin:12px 0 0;font-size:12px;color:rgba(255,255,255,0.35)">${siteUrl}</p>
+                    </td></tr>
+                  </table>
+                </td></tr>
+                <tr><td style="padding:0 40px 32px;border-top:1px solid rgba(197,160,89,0.15)">
+                  <p style="margin:16px 0 4px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">Your Personal Agent</p>
+                  <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#faf8f4">👤 ${agentName}</p>
+                  <p style="margin:0 0 4px;font-size:13px"><a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">📞 ${agentPhone}</a></p>
+                  <p style="margin:0 0 4px;font-size:13px"><a href="mailto:${agentEmail}" style="color:#c5a059;text-decoration:none">📧 ${agentEmail}</a></p>
+                  <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">🏢 ${companyName}</p>
+                </td></tr>
+                <tr><td style="background:rgba(0,0,0,0.3);padding:16px 40px;text-align:center;border-top:1px solid rgba(255,255,255,0.05)">
+                  <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2)">&copy; ${new Date().getFullYear()} ${companyName} &middot; <a href="${siteUrl}" style="color:rgba(255,255,255,0.3);text-decoration:none">${siteUrl}</a></p>
+                </td></tr>
+              </table>
+            </td></tr>
+          </table></body></html>`;
 
-          const message = `Hi ${lead.name ? lead.name.split(' ')[0] : 'there'},\n\nFollowing up on your interest in ${lead.property_interest || 'our properties'}.\n\nBrowse all listings: ${baseUrl}\n\n${agentName}\n${agentPhone}\n${agentEmail}`;
+          const message = `Hi ${lead.name ? lead.name.split(' ')[0] : 'there'},\n\nFollowing up on your interest in ${lead.property_interest || 'our properties'}.\n\nBrowse all our premium listings: ${siteUrl}\n\n${agentName}\n${agentPhone}\n${agentEmail}\n${companyName}`;
 
+          console.log(`[FOLLOWUP] Sending email to ${lead.name} <${lead.email}>...`);
           try {
             const res = await fetch('/api/email', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'x-api-secret': secret },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ to: lead.email, subject, html, message })
             });
             const data = await res.json();
+            console.log(`[FOLLOWUP] Response for ${lead.email}:`, data);
             if (data.success) sentCount++;
-            else { failCount++; console.warn('Follow-up email failed for', lead.email, data.error); }
-          } catch (e) { failCount++; console.error('Email send error for', lead.email, e.message); }
+            else { failCount++; toast(`⚠️ Failed for ${lead.name}: ${data.error?.message || data.error || 'Unknown'}`, true); }
+          } catch (e) { failCount++; console.error('Email send error for', lead.email, e.message); toast(`⚠️ Network error for ${lead.name}`, true); }
         }
 
         btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to Selected Leads';
