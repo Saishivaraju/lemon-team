@@ -11692,11 +11692,13 @@ ${date}`;
     function populateSmartToolsSelects() {
       const ls = state.leads.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
 
-      // Follow-up dropdown: only show leads that have an email address
-      const leadsWithEmail = state.leads.filter(l => l.email && l.email.trim());
-      const followupOpts = leadsWithEmail.length
-        ? leadsWithEmail.map(l => `<option value="${l.id}">${l.name} — ${l.email}</option>`).join('')
-        : '<option value="" disabled>No leads with email found</option>';
+      // Follow-up dropdown: show ALL leads (backend will look up email from DB)
+      const followupOpts = state.leads.length
+        ? state.leads.map(l => {
+            const emailHint = l.email ? ` — ${l.email}` : ' — (email in DB)';
+            return `<option value="${l.id}">${l.name}${emailHint}</option>`;
+          }).join('')
+        : '<option value="" disabled>No leads found</option>';
 
       const el1 = document.getElementById('doc-lead-select'); if (el1) el1.innerHTML = '<option value="">Select Lead...</option>' + ls;
       const el2 = document.getElementById('matchmaker-lead-select'); if (el2) el2.innerHTML = '<option value="">Select Lead...</option>' + ls;
@@ -11805,115 +11807,50 @@ ${date}`;
       btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
       btn.disabled = true;
 
-      const agent = state.agent || {};
-      const agentName = agent.name || 'Zorvo Agent';
-      const agentPhone = agent.phone || '';
-      const agentEmail = agent.email || '';
-      const companyName = agent.agency_name || 'Zorvo Realty';
-      // Always link to the public-facing site, not the dashboard URL
-      const siteUrl = 'https://lemon-mocha.vercel.app';
+      const secret = (DB.get('pe_access') || {}).password || 'propedge_secret_2026';
+      let sentCount = 0;
+      let failCount = 0;
+      const failedNames = [];
 
-      const props = (state.properties || []).filter(p =>
-        ['available', 'Available', 'active', 'Active'].includes(p.status) || !p.status
-      ).slice(0, 5);
-
-      const subject = '🏡 Your Personalized Property Update — ' + companyName;
-
-      try {
-        let sentCount = 0;
-        let failCount = 0;
-        for (const leadId of selectedOptions) {
-          const lead = state.leads.find(l => l.id === leadId);
-          if (!lead) continue;
-          if (!lead.email) { failCount++; toast(`⚠️ ${lead.name || leadId} has no email — skipped`, true); continue; }
-
-          // Basic email format validation — catch typos like 'gmail.come'
-          const emailOk = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/.test(lead.email.trim());
-          if (!emailOk) {
+      for (const leadId of selectedOptions) {
+        const leadName = (state.leads.find(l => l.id === leadId) || {}).name || leadId;
+        console.log(`[FOLLOWUP] Sending via backend for lead: ${leadName} (${leadId})`);
+        try {
+          const res = await fetch('/api/followups/manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-secret': secret },
+            body: JSON.stringify({ leadId })
+          });
+          const data = await res.json();
+          console.log(`[FOLLOWUP] Backend response for ${leadName}:`, data);
+          if (data.success) {
+            sentCount++;
+            toast(`✅ Email sent to ${leadName}!`);
+          } else {
             failCount++;
-            toast(`⚠️ Invalid email for ${lead.name}: "${lead.email}" — fix the email first`, true);
-            console.warn(`[FOLLOWUP] Skipping ${lead.name} — invalid email: ${lead.email}`);
-            continue;
+            const errMsg = data.error || 'Unknown error';
+            failedNames.push(`${leadName}: ${errMsg}`);
+            toast(`⚠️ Failed — ${leadName}: ${errMsg}`, true);
           }
-
-          // Build property cards HTML with correct site URL
-          const propCards = props.length ? props.map((p, i) => {
-            const link = `${siteUrl}/index.html#property-${p.id || (i + 1)}`;
-            const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent((p.name || 'Property') + ' ' + (p.location || ''))}`;
-            return `<tr><td style="padding:14px 0;border-bottom:1px solid rgba(197,160,89,0.12)">
-              <p style="margin:0 0 3px;font-size:15px;font-weight:700;color:#faf8f4">${p.name || p.title || 'Property'}</p>
-              <p style="margin:0 0 4px;font-size:12px;color:rgba(255,255,255,0.45)">${p.property_type || 'Property'} &middot; 📍 ${p.location || 'Prime Location'}</p>
-              <p style="margin:0 0 10px;font-size:16px;font-weight:700;color:#c5a059">${p.price_label || (p.price ? '$' + Number(p.price).toLocaleString() : 'Contact for Price')}</p>
-              <a href="${link}" style="display:inline-block;background:#c5a059;color:#0a0e14;padding:7px 16px;border-radius:5px;text-decoration:none;font-size:12px;font-weight:700;margin-right:8px">View Property →</a>
-              <a href="${maps}" style="display:inline-block;border:1px solid rgba(197,160,89,0.4);color:#c5a059;padding:7px 12px;border-radius:5px;text-decoration:none;font-size:12px">📍 Map</a>
-            </td></tr>`;
-          }).join('') : `<tr><td style="color:rgba(255,255,255,0.4);padding:16px 0;text-align:center">Visit our website to browse all available premium properties.</td></tr>`;
-
-          const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-          <body style="margin:0;padding:0;background:#0a0e14;font-family:'Segoe UI',Arial,sans-serif">
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0e14;padding:24px 16px">
-            <tr><td align="center">
-              <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#111520;border-radius:16px;overflow:hidden;border:1px solid rgba(197,160,89,0.25)">
-                <tr><td style="background:linear-gradient(135deg,#1a1a18 0%,#0f2044 100%);padding:36px 40px 28px;border-bottom:2px solid #c5a059;text-align:center">
-                  <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:3px;text-transform:uppercase">From ${companyName}</p>
-                  <h1 style="margin:8px 0 0;color:#c5a059;font-size:26px;font-weight:300;letter-spacing:1px">🏡 Property Follow-Up</h1>
-                  <p style="margin:10px 0 0;color:rgba(255,255,255,0.5);font-size:14px">Curated listings selected just for you</p>
-                </td></tr>
-                <tr><td style="padding:32px 40px 0">
-                  <p style="margin:0 0 6px;font-size:18px;color:#faf8f4;font-weight:600">Hi ${lead.name ? lead.name.split(' ')[0] : 'there'}! 👋</p>
-                  <p style="margin:0 0 20px;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.8">I'm following up on your interest in ${lead.property_interest ? `<strong style="color:#c5a059">${lead.property_interest}</strong>` : 'our properties'}${lead.budget ? ` within your <strong style="color:#c5a059">${lead.budget}</strong> budget` : ''}. Here are our top available listings for you:</p>
-                  <table width="100%" cellpadding="0" cellspacing="0">${propCards}</table>
-                </td></tr>
-                <tr><td style="padding:28px 40px">
-                  <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(197,160,89,0.06);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:24px;text-align:center">
-                    <tr><td>
-                      <p style="margin:0 0 6px;font-size:15px;color:#faf8f4;font-weight:600">Ready to schedule a visit?</p>
-                      <p style="margin:0 0 18px;font-size:13px;color:rgba(255,255,255,0.45)">Browse all our premium listings and book your free property tour</p>
-                      <a href="${siteUrl}" style="display:inline-block;background:linear-gradient(135deg,#c5a059,#b8965a);color:#0a0e14;padding:14px 36px;border-radius:8px;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:1px">Browse All Properties →</a>
-                      <p style="margin:12px 0 0;font-size:12px;color:rgba(255,255,255,0.35)">${siteUrl}</p>
-                    </td></tr>
-                  </table>
-                </td></tr>
-                <tr><td style="padding:0 40px 32px;border-top:1px solid rgba(197,160,89,0.15)">
-                  <p style="margin:16px 0 4px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">Your Personal Agent</p>
-                  <p style="margin:0 0 4px;font-size:16px;font-weight:700;color:#faf8f4">👤 ${agentName}</p>
-                  <p style="margin:0 0 4px;font-size:13px"><a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">📞 ${agentPhone}</a></p>
-                  <p style="margin:0 0 4px;font-size:13px"><a href="mailto:${agentEmail}" style="color:#c5a059;text-decoration:none">📧 ${agentEmail}</a></p>
-                  <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">🏢 ${companyName}</p>
-                </td></tr>
-                <tr><td style="background:rgba(0,0,0,0.3);padding:16px 40px;text-align:center;border-top:1px solid rgba(255,255,255,0.05)">
-                  <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.2)">&copy; ${new Date().getFullYear()} ${companyName} &middot; <a href="${siteUrl}" style="color:rgba(255,255,255,0.3);text-decoration:none">${siteUrl}</a></p>
-                </td></tr>
-              </table>
-            </td></tr>
-          </table></body></html>`;
-
-          const message = `Hi ${lead.name ? lead.name.split(' ')[0] : 'there'},\n\nFollowing up on your interest in ${lead.property_interest || 'our properties'}.\n\nBrowse all our premium listings: ${siteUrl}\n\n${agentName}\n${agentPhone}\n${agentEmail}\n${companyName}`;
-
-          console.log(`[FOLLOWUP] Sending email to ${lead.name} <${lead.email}>...`);
-          try {
-            const res = await fetch('/api/email', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ to: lead.email, subject, html, message })
-            });
-            const data = await res.json();
-            console.log(`[FOLLOWUP] Response for ${lead.email}:`, data);
-            if (data.success) sentCount++;
-            else { failCount++; toast(`⚠️ Failed for ${lead.name}: ${data.error?.message || data.error || 'Unknown'}`, true); }
-          } catch (e) { failCount++; console.error('Email send error for', lead.email, e.message); toast(`⚠️ Network error for ${lead.name}`, true); }
+        } catch (e) {
+          failCount++;
+          failedNames.push(`${leadName}: Network error`);
+          toast(`⚠️ Network error for ${leadName}`, true);
+          console.error('[FOLLOWUP] fetch error:', e.message);
         }
+        // Small delay between sends to avoid hammering the API
+        await new Promise(r => setTimeout(r, 500));
+      }
 
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to Selected Leads';
-        btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Follow-Up Email to Selected Leads';
+      btn.disabled = false;
 
-        if (sentCount > 0 && failCount === 0) toast(`✅ Follow-up email sent to ${sentCount} lead(s)! 📧`);
-        else if (sentCount > 0) toast(`📧 Sent to ${sentCount} lead(s). ${failCount} failed (no email?).`);
-        else toast(`❌ No emails sent. ${failCount} lead(s) missing email address.`, true);
-      } catch (err) {
-        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to Selected Leads';
-        btn.disabled = false;
-        toast('Connection error: ' + err.message, true);
+      if (sentCount > 0 && failCount === 0) {
+        toast(`✅ Follow-up emails sent to ${sentCount} lead(s)! 📧`);
+      } else if (sentCount > 0) {
+        toast(`📧 Sent to ${sentCount} lead(s). ${failCount} failed — check console for details.`);
+      } else {
+        toast(`❌ No emails sent. ${failCount} failed. Check that leads have email addresses in the database.`, true);
       }
     }
 
