@@ -2173,8 +2173,13 @@ app.post('/api/ai/chat', async (req, res) => {
       return;
     }
 
+    const leadPhone = (lead && lead.phone) || (session.leadData && session.leadData.phone) || null;
+    const leadId = (lead && lead.id) || (session.leadData && session.leadData.id) || null;
+    const agentContext = await resolveAgentForLead(leadId, leadPhone);
+    const targetAgentEmail = agentContext.email || req.body.agentEmail || AGENT_EMAIL;
+
     const channel = (sessionId && sessionId.startsWith('wa_')) ? 'WHATSAPP' : 'VOICE';
-    const systemPrompt = await buildPriyaPrompt(AGENT_EMAIL, channel);
+    const systemPrompt = await buildPriyaPrompt(targetAgentEmail, channel);
     const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({
       model: "gemini-3-flash-preview",
@@ -2214,7 +2219,7 @@ app.post('/api/ai/chat', async (req, res) => {
 
           // Auto-book the visit via the existing /api/visits endpoint
           const visitPayload = {
-            agentEmail: AGENT_EMAIL,
+            agentEmail: targetAgentEmail,
             is_ai_booking: true,
             visit: {
               property_name: propertyName,
@@ -2613,6 +2618,12 @@ app.post('/api/vapi/webhook', async (req, res) => {
     const leadId = metadata.leadId || null;
     const phone = call.customer?.number || null;
 
+    // Resolve target agent context dynamically based on lead identity
+    const agentContext = await resolveAgentForLead(leadId, phone);
+    const targetAgentEmail = agentContext.email || AGENT_EMAIL;
+    const targetAgentName = agentContext.name || AGENT_NAME;
+    const targetAgentPhone = agentContext.phone || AGENT_PHONE;
+
     // ── call-started ────────────────────────────────────────────────────────
     if (type === 'call-started' || (type === 'status-update' && event?.message?.status === 'in-progress')) {
       console.log(`📞 VAPI call started → ${phone}`);
@@ -2637,7 +2648,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
       if (finalLeadId) {
         await robustUpdateLeadStage(finalLeadId, 'Contacted');
-        await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, { pipeline_stage: 'Contacted', status: 'Contacted' });
+        await syncLeadToSnapshot(targetAgentEmail, finalLeadId, { pipeline_stage: 'Contacted', status: 'Contacted' });
       }
       if (phone) await cancelRetry(phone);
     }
@@ -2649,7 +2660,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
       // Fetch current properties to give the AI context
       let properties = [];
       try {
-        const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        const snapshot = await DataSnapshot.findOne({ email: targetAgentEmail });
         if (snapshot && snapshot.data && snapshot.data.pe_properties) {
           properties = typeof snapshot.data.pe_properties === 'string'
             ? JSON.parse(snapshot.data.pe_properties)
@@ -2776,7 +2787,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           console.log('[VALIDATION RESULT] Validation PASSED');
 
           const visitPayload = {
-            agentEmail: AGENT_EMAIL,
+            agentEmail: targetAgentEmail,
             is_ai_booking: true,
             visit: {
               lead_id: leadId || leadInfo.id || null,
@@ -2825,7 +2836,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
       }
 
       if (fnName === 'transferCall') {
-        let transferPhone = process.env.TRANSFER_NUMBER || process.env.AGENT_PHONE;
+        let transferPhone = targetAgentPhone;
         transferPhone = normalizePhone(transferPhone);
         if (transferPhone && !transferPhone.startsWith('+')) {
           transferPhone = '+' + transferPhone;
@@ -2834,7 +2845,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         // 1. Notify agent via Email
         try {
           await sendEmail({
-            to: AGENT_EMAIL,
+            to: targetAgentEmail,
             subject: `🔥 URGENT: Transfer Request from VAPI AI — Lead ${phone}`,
             message: `VAPI AI transferred a lead who requested a human agent.\n\nLead Phone: ${phone}\nReason: ${fnArgs.reason || 'requested human'}\n\nPlease call them back immediately!\n\n— PropEdge AI`,
             html: `<div style="font-family:Arial,sans-serif;max-width:600px;background:#0a0e14;color:#faf8f4;padding:24px;border-radius:8px;border:2px solid #e05060"><h2 style="color:#e05060;margin:0 0 16px">🔥 URGENT: Transfer Request</h2><p>A lead has requested a human agent via VAPI AI.</p><table style="width:100%;border-collapse:collapse"><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Lead Phone:</td><td style="padding:8px 0;color:#faf8f4;font-weight:bold">${phone}</td></tr><tr><td style="padding:8px 0;color:rgba(255,255,255,0.5)">Reason:</td><td style="padding:8px 0;color:#faf8f4">${fnArgs.reason || 'requested human'}</td></tr></table><p style="margin-top:16px;color:#e05060;font-weight:bold">Please call them back immediately!</p></div>`
@@ -2925,20 +2936,20 @@ app.post('/api/vapi/webhook', async (req, res) => {
 </body></html>`;
 
           await sendEmail({
-            to: AGENT_EMAIL,
+            to: targetAgentEmail,
             subject: `⚠️ URGENT: ${leadName} (${phone}) needs you — AI escalating call`,
             message: `URGENT: Lead ${leadName} (${phone}) asked for something specific we don't have.\nWhat they want: ${specific_request || property_type || 'Custom request'} | Budget: ${budget || 'N/A'} | Location: ${location || 'N/A'}\n${reason ? 'Why escalated: ' + reason : ''}\nCall them NOW — the AI is transferring the call to you.`,
             html: htmlBody
           });
 
-          await notifyAgent(AGENT_EMAIL, {
+          await notifyAgent(targetAgentEmail, {
             title: `⚠️ ${leadName} has a specific request — call them now`,
             description: `${specific_request || property_type || 'Custom request'} | Budget: ${budget || 'N/A'} | Location: ${location || 'N/A'} | Phone: ${phone}`,
             type: 'lead',
             icon: '⚠️'
           });
 
-          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, {
+          if (leadId) await syncLeadToSnapshot(targetAgentEmail, leadId, {
             status: 'NEEDS_AGENT', lead_score: 'HOT', specific_request: specific_request || property_type, next_action: 'transfer'
           });
 
@@ -2960,7 +2971,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         
         try {
           let propId = '';
-          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+          const snap = await DataSnapshot.findOne({ email: targetAgentEmail });
           if (snap?.data?.pe_properties) {
             const props = typeof snap.data.pe_properties === 'string' ? JSON.parse(snap.data.pe_properties) : snap.data.pe_properties;
             const p = props.find(x => x.name.toLowerCase().includes((property_name || '').toLowerCase()));
@@ -2968,7 +2979,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           }
           const link = `${process.env.BASE_URL}/property.html?id=${propId}`;
           if (phone) await sendSMSText(phone, `Hi, here is the information for ${property_name} you requested: ${link}`);
-          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, { property_link_sent: true });
+          if (leadId) await syncLeadToSnapshot(targetAgentEmail, leadId, { property_link_sent: true });
         } catch(e) {
           console.error('[TOOL] send_property_link error:', e.message);
         }
@@ -2991,7 +3002,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           // Try to find the specific property to link directly to its page
           let propId = '';
           let propDetails = null;
-          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+          const snap = await DataSnapshot.findOne({ email: targetAgentEmail });
           if (snap?.data?.pe_properties) {
             const props = typeof snap.data.pe_properties === 'string'
               ? JSON.parse(snap.data.pe_properties)
@@ -3011,7 +3022,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           const propLocation = propDetails?.location || propDetails?.address || '';
           const propType = propDetails?.property_type || propDetails?.type || 'Property';
           const leadName = name || 'there';
-          const agentPhone = process.env.AGENT_PHONE || '+1 707 675 1556';
+          const agentPhone = targetAgentPhone;
 
           // Rich HTML booking email
           const htmlBody = `<!DOCTYPE html>
@@ -3076,9 +3087,9 @@ app.post('/api/vapi/webhook', async (req, res) => {
         <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid rgba(197,160,89,0.15);padding-top:24px">
           <tr><td>
             <p style="margin:0 0 4px;font-size:11px;color:rgba(255,255,255,0.3);letter-spacing:2px;text-transform:uppercase">Your Personal Agent</p>
-            <p style="margin:0 0 4px;font-size:17px;font-weight:700;color:#faf8f4">👤 ${AGENT_NAME}</p>
+            <p style="margin:0 0 4px;font-size:17px;font-weight:700;color:#faf8f4">👤 ${targetAgentName}</p>
             <p style="margin:0 0 4px;font-size:13px;color:rgba(255,255,255,0.5)">📞 <a href="tel:${agentPhone}" style="color:#c5a059;text-decoration:none">${agentPhone}</a></p>
-            <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">📧 <a href="mailto:${AGENT_EMAIL}" style="color:#c5a059;text-decoration:none">${AGENT_EMAIL}</a></p>
+            <p style="margin:0;font-size:13px;color:rgba(255,255,255,0.5)">📧 <a href="mailto:${targetAgentEmail}" style="color:#c5a059;text-decoration:none">${targetAgentEmail}</a></p>
           </td></tr>
         </table>
       </td></tr>
@@ -3100,7 +3111,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
             await sendEmail({
               to: leadEmailAddr,
               subject: `📅 Book Your Visit for ${propName} — ${companyName}`,
-              message: `Hi ${leadName},\n\nAs discussed on our call, here is your direct booking link for ${propName}:\n${propertyPageLink}\n\nSimply click the link and pick your preferred date and time.\n\n${AGENT_NAME}\n${agentPhone}\n${companyName}`,
+              message: `Hi ${leadName},\n\nAs discussed on our call, here is your direct booking link for ${propName}:\n${propertyPageLink}\n\nSimply click the link and pick your preferred date and time.\n\n${targetAgentName}\n${agentPhone}\n${targetAgentEmail}\n${companyName}`,
               html: htmlBody
             });
             console.log(`✅ Booking email sent to ${leadEmailAddr} for property: ${propName}`);
@@ -3108,7 +3119,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
             console.warn(`⚠️  No email found for lead ${phone} — booking email skipped`);
           }
 
-          if (leadId) await syncLeadToSnapshot(AGENT_EMAIL, leadId, { booking_link_sent: true, booking_email_sent: true });
+          if (leadId) await syncLeadToSnapshot(targetAgentEmail, leadId, { booking_link_sent: true, booking_email_sent: true });
         } catch(e) {
           console.error('[TOOL] send_booking_link error:', e.message);
         }
@@ -3137,7 +3148,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           </div>`;
           
           await sendEmail({
-            to: AGENT_EMAIL,
+            to: targetAgentEmail,
             subject: `🔥 HIGH PRIORITY: Missed Transfer from Lead ${phone}`,
             message: `A transfer failed. Please call back ${phone} today regarding ${property_name || 'properties'}.`,
             html: emailHtml
@@ -3145,7 +3156,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
           // Send Links to Lead
           let propId = '';
-          const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+          const snap = await DataSnapshot.findOne({ email: targetAgentEmail });
           if (snap?.data?.pe_properties) {
             const props = typeof snap.data.pe_properties === 'string' ? JSON.parse(snap.data.pe_properties) : snap.data.pe_properties;
             const p = props.find(x => x.name.toLowerCase().includes((property_name || '').toLowerCase()));
@@ -3155,12 +3166,12 @@ app.post('/api/vapi/webhook', async (req, res) => {
           const bLink = process.env.BASE_URL;
           
           if (phone) {
-             await sendSMSText(phone, `Hi, this is ${AGENT_NAME}. Sorry I missed your call just now! Here are the details for ${property_name || 'the property'}: ${pLink}\n\nYou can also book a visit here: ${bLink}`);
+             await sendSMSText(phone, `Hi, this is ${targetAgentName}. Sorry I missed your call just now! Here are the details for ${property_name || 'the property'}: ${pLink}\n\nYou can also book a visit here: ${bLink}`);
           }
           
           // Update Dashboard Status
           if (leadId) {
-            await syncLeadToSnapshot(AGENT_EMAIL, leadId, { 
+            await syncLeadToSnapshot(targetAgentEmail, leadId, { 
               status: 'TRANSFER_FAILED_AGENT_BUSY',
               next_action: 'follow_up',
               property_link_sent: true,
@@ -3200,7 +3211,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
               status: 'pending',
             }).catch(e => console.error('[TOOL] Task insert error:', e.message));
 
-            await notifyAgent(AGENT_EMAIL, {
+            await notifyAgent(targetAgentEmail, {
               title: `📅 Callback Requested: ${call.customer?.name || phone}`,
               description: `Lead wants a callback at: ${callback_time}`,
               type: 'lead', icon: '📅',
@@ -3209,7 +3220,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
           // Sync to snapshot
           if (leadId) {
-            await syncLeadToSnapshot(AGENT_EMAIL, leadId, {
+            await syncLeadToSnapshot(targetAgentEmail, leadId, {
               status: leadStatus,
               pipeline_stage: leadStatus,
               callback_time: callback_time || null,
@@ -3240,7 +3251,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
             status: 'pending',
           }).catch(e => console.error('[TOOL] Follow-up task insert error:', e.message));
 
-          await notifyAgent(AGENT_EMAIL, {
+          await notifyAgent(targetAgentEmail, {
             title: `📋 Follow-Up Task Created: ${call.customer?.name || phone}`,
             description: followUpReason,
             type: 'info', icon: '📋',
@@ -3261,7 +3272,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         try {
           // Save to snapshot as a note — full sync happens in end-of-call-report
           if (leadId) {
-            await syncLeadToSnapshot(AGENT_EMAIL, leadId, {
+            await syncLeadToSnapshot(targetAgentEmail, leadId, {
               ai_call_summary: callSummary,
               next_action,
             });
@@ -3372,7 +3383,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
       // FIRST: Check local MongoDB Snapshot for the lead by ID or phone number
       try {
-        const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        const snap = await DataSnapshot.findOne({ email: targetAgentEmail });
         if (snap && snap.data && snap.data.pe_leads) {
           let leads = typeof snap.data.pe_leads === 'string'
             ? JSON.parse(snap.data.pe_leads)
@@ -3464,7 +3475,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         }
 
         // Sync to MongoDB DataSnapshot pe_leads
-        await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, {
+        await syncLeadToSnapshot(targetAgentEmail, finalLeadId, {
           ...updates,
           pipeline_stage: 'Contacted',
           status: 'Contacted'
@@ -3503,7 +3514,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         let savedTeamLead = null;
         try {
           const newTeamLeadRecord = {
-            team_id: AGENT_EMAIL,
+            team_id: targetAgentEmail,
             name: newLeadRecord.name,
             phone: newLeadRecord.phone,
             email: newLeadRecord.email,
@@ -3518,8 +3529,8 @@ app.post('/api/vapi/webhook', async (req, res) => {
         } catch (e) { }
 
         try {
-          let snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
-          if (!snapshot) snapshot = new DataSnapshot({ email: AGENT_EMAIL, data: {} });
+          let snapshot = await DataSnapshot.findOne({ email: targetAgentEmail });
+          if (!snapshot) snapshot = new DataSnapshot({ email: targetAgentEmail, data: {} });
           if (!snapshot.data) snapshot.data = {};
 
           let leads = snapshot.data.pe_leads || [];
@@ -3615,7 +3626,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         finalLeadId = 'lead_' + Date.now();
       }
 
-      await syncCallLogToSnapshot(AGENT_EMAIL, {
+      await syncCallLogToSnapshot(targetAgentEmail, {
         id: call.id || ('call_' + Date.now()),
         lead_id: finalLeadId,
         lead_name: leadNameForCall,
@@ -3646,7 +3657,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
       console.log('[CALL_RESULT]', JSON.stringify(callResult));
 
       // 6. Send Bell Notification to Dashboard
-      await notifyAgent(AGENT_EMAIL, {
+      await notifyAgent(targetAgentEmail, {
         title: `📞 Call Ended: ${leadNameForCall}`,
         description: `Duration: ${durationStr} · Outcome: ${callStatus} · Score: ${urgencyScore}/10`,
         type: 'info',
@@ -3678,7 +3689,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
       let followupProperties = [];
       try {
-        const snapProp = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        const snapProp = await DataSnapshot.findOne({ email: targetAgentEmail });
         if (snapProp?.data?.pe_properties) {
           followupProperties = typeof snapProp.data.pe_properties === 'string'
             ? JSON.parse(snapProp.data.pe_properties) : snapProp.data.pe_properties;
@@ -3692,15 +3703,15 @@ app.post('/api/vapi/webhook', async (req, res) => {
           
           let propertyAddress = 'Confirmed Property Location';
           let propertyDetailsHtml = '';
-          const agentName = process.env.AGENT_NAME || 'Sarah Al-Rashid';
-          const agentPhone = process.env.AGENT_PHONE || '+971 50 123 4567';
+          const agentName = targetAgentName;
+          const agentPhone = targetAgentPhone;
           const agencyName = process.env.COMPANY_NAME || 'Zorvo Realty';
           const websiteUrl = process.env.BASE_URL || 'https://lemon-mocha.vercel.app';
           const propName = activeVisit?.property_name || extractedLead.property_interest || 'Premium Property';
 
           // Try to look up address and property details
           try {
-            const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+            const snapshot = await DataSnapshot.findOne({ email: targetAgentEmail });
             if (snapshot && snapshot.data && snapshot.data.pe_properties) {
               const properties = typeof snapshot.data.pe_properties === 'string'
                 ? JSON.parse(snapshot.data.pe_properties)
@@ -3747,7 +3758,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           await sendEmail({
             to: leadEmail,
             subject: `🏡 CONFIRMED: Your property viewing at ${propName}`,
-            message: `Hi ${extractedLead.name || 'there'},\n\nThank you for speaking with us! We have confirmed your showing itinerary.\n\nDate: ${visitDateStr}\nTime: ${visitTimeStr}\nProperty: ${propName}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${AGENT_EMAIL}\n\nExplore more listings: ${websiteUrl}`,
+            message: `Hi ${extractedLead.name || 'there'},\n\nThank you for speaking with us! We have confirmed your showing itinerary.\n\nDate: ${visitDateStr}\nTime: ${visitTimeStr}\nProperty: ${propName}\nAddress: ${propertyAddress}\n\nAgent Contact Info:\nName: ${agentName}\nAgency: ${agencyName}\nPhone: ${agentPhone}\nEmail: ${targetAgentEmail}\n\nExplore more listings: ${websiteUrl}`,
             html: `
 <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;background:#0a0e14;border-radius:12px;overflow:hidden;border:1px solid #c5a059">
   <div style="background:linear-gradient(135deg,#1a1a18,#0f2044);padding:32px;text-align:center;border-bottom:2px solid #c5a059">
@@ -3798,7 +3809,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:8px">${agencyName} Elite Partner</div>
           <div style="font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6">
             📱 Phone: <strong>${agentPhone}</strong><br>
-            ✉️ Email: <strong>${AGENT_EMAIL}</strong>
+            ✉️ Email: <strong>${targetAgentEmail}</strong>
           </div>
         </div>
       </div>
@@ -3829,7 +3840,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           };
           let followupProperties = [];
           try {
-            const snap = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+            const snap = await DataSnapshot.findOne({ email: targetAgentEmail });
             if (snap?.data?.pe_properties) {
               followupProperties = typeof snap.data.pe_properties === 'string'
                 ? JSON.parse(snap.data.pe_properties)
@@ -3849,7 +3860,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           await robustUpdateLeadStage(finalLeadId, callStatus);
 
           // ── Notify Agent: missed call / no answer ──────────────────────────
-          await notifyAgent(AGENT_EMAIL, {
+          await notifyAgent(targetAgentEmail, {
             title: `📵 Missed Call: ${leadMeta.name || phone}`,
             description: `Lead did not answer the AI call.\nPhone: ${phone}\nOutcome: ${callStatus}\nRetry scheduled in ${retryPolicy.retryDelayMinutes} minutes.${leadEmail ? `\nEmail: ${leadEmail}` : ''}\n\nA "Sorry we missed you" email has been sent to the lead automatically.`,
             type: 'warning',
@@ -3911,7 +3922,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         case OUTCOMES.CALL_FAILED:
           console.log(`[OUTCOME] call_failed (${endedReason}) — notifying agent`);
           await robustUpdateLeadStage(finalLeadId, 'call_failed');
-          await notifyAgent(AGENT_EMAIL, {
+          await notifyAgent(targetAgentEmail, {
             title: `⚠️ Call Failed: ${leadMeta.name || phone}`,
             description: `Reason: ${endedReason}\nPhone: ${phone}`,
             type: 'warning', icon: '⚠️',
@@ -3942,7 +3953,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
               due_date: cbDue, priority: 'high', status: 'pending'
             });
           } catch (e) { console.error('[OUTCOME] Callback task error:', e.message); }
-          await notifyAgent(AGENT_EMAIL, {
+          await notifyAgent(targetAgentEmail, {
             title: `📅 Callback Requested: ${leadMeta.name || phone}`,
             description: `Lead asked to be called back. Phone: ${phone}`,
             type: 'lead', icon: '📅'
@@ -3960,7 +3971,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
         case OUTCOMES.TRANSFERRED:
           console.log(`[OUTCOME] transferred — notifying agent`);
           await robustUpdateLeadStage(finalLeadId, 'transferred');
-          await notifyAgent(AGENT_EMAIL, {
+          await notifyAgent(targetAgentEmail, {
             title: `🔀 Transfer Requested: ${leadMeta.name || phone}`,
             description: `Lead requested transfer to agent. Phone: ${phone}`,
             type: 'lead', icon: '🔀',
@@ -3984,7 +3995,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
 
       // 9. Advance campaign queue — ALWAYS runs, wrapped in try/finally
       try {
-        const snapForCampaign = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+        const snapForCampaign = await DataSnapshot.findOne({ email: targetAgentEmail });
         if (snapForCampaign && snapForCampaign.data) {
           let campaignStats = snapForCampaign.data.pe_campaign_stats
             ? (typeof snapForCampaign.data.pe_campaign_stats === 'string'
@@ -4000,7 +4011,7 @@ app.post('/api/vapi/webhook', async (req, res) => {
           if (callStatus === OUTCOMES.INTERESTED)      campaignStats.followUps     = (campaignStats.followUps || 0) + 1;
 
           // Sync outcome to lead snapshot
-          await syncLeadToSnapshot(AGENT_EMAIL, finalLeadId, {
+          await syncLeadToSnapshot(targetAgentEmail, finalLeadId, {
             call_outcome: callStatus,
             last_call_time: new Date().toISOString()
           });

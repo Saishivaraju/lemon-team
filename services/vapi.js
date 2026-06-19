@@ -14,13 +14,14 @@ const COMPANY_NAME         = process.env.COMPANY_NAME  || 'Zorvo Realty';
 const BASE_URL             = process.env.BASE_URL       || 'https://lemon-mocha.vercel.app';
 
 // ── Make outbound call via VAPI ───────────────────────────────────────────────
-async function makeOutboundCall(lead, properties = []) {
+async function makeOutboundCall(lead, properties = [], agentContext = null) {
   if (!VAPI_API_KEY) {
     console.warn('⚠️  VAPI_API_KEY not set — simulating call');
     return { success: true, simulated: true, id: 'sim_' + Date.now() };
   }
 
   const { default: fetch } = await import('node-fetch');
+  const agentName = agentContext?.name || lead.assigned_agent_name || AGENT_NAME;
 
   // Format property list for the AI
   const propertyList = properties.length > 0
@@ -30,7 +31,10 @@ async function makeOutboundCall(lead, properties = []) {
    - Location: ${p.address || p.location || 'N/A'}
    - Price: ${p.price_label || (p.price ? '$' + Number(p.price).toLocaleString() : 'Contact agent')}
    - Features: ${p.bedrooms ? p.bedrooms + ' BR' : ''} ${p.bathrooms ? '· ' + p.bathrooms + ' BA' : ''}
-   - Description: ${p.description ? p.description.substring(0, 100) + '...' : 'Premium property.'}`
+   - Description: ${p.description ? p.description.substring(0, 100) + '...' : 'Premium property.'}
+   - Neighborhood Info: ${p.neighborhood_info || 'N/A'}
+   - Financing Options: ${p.financing_options || 'N/A'}
+   - Key Selling Points: ${p.key_selling_points || 'N/A'}`
       ).join('\n\n')
     : 'Properties will be loaded dynamically from our latest inventory.';
 
@@ -40,7 +44,7 @@ async function makeOutboundCall(lead, properties = []) {
       leadName:         lead.name              || 'there',
       propertyInterest: lead.property_interest || 'properties',
       budget:           lead.budget            || 'flexible',
-      agentName:        lead.assigned_agent_name || AGENT_NAME,
+      agentName:        agentName,
       companyName:      COMPANY_NAME,
     },
     model: {
@@ -49,7 +53,7 @@ async function makeOutboundCall(lead, properties = []) {
       messages: [
         {
           role: 'system',
-          content: `You are ${lead.assigned_agent_name || AGENT_NAME} from ${COMPANY_NAME}.
+          content: `You are ${agentName} from ${COMPANY_NAME}.
 You are calling ${lead.name || 'a lead'} who recently showed interest in ${lead.property_interest || 'real estate'} on our website.
 
 LEAD DETAILS:
@@ -63,16 +67,17 @@ ${propertyList}
 YOUR GOAL:
 1. Greet them by name and introduce yourself naturally.
 2. Present the property: Explain type, bedrooms, bathrooms, price, key features, and unique selling points. Be consultative, not robotic.
-3. Share location intelligence: Mention nearby schools, shopping centers, hospitals, parks, or transportation.
-4. Qualify the lead: Ask if they are actively searching, what type of property they are interested in, their timeline, if it's for personal use or investment, and if they are already working with an agent.
-5. Identify their interest level (HOT, WARM, COLD) and move them to the best next step.
+3. Share location intelligence: Mention nearby schools, shopping centers, companies, transport, and other neighborhood benefits.
+4. Explain financing: Outline purchasing terms, down payment, HOA fees, loan options, and how they can get pre-approved or apply for loans.
+5. Qualify the lead: Ask if they are actively searching, what type of property they are interested in, their timeline, if it's for personal use or investment, and if they are already working with an agent.
+6. Identify their interest level (HOT, WARM, COLD) and move them to the best next step.
    - Do NOT force a booking.
    - You can offer to send property details or a booking link via SMS/email.
    - If they show strong interest, offer to transfer the call directly to a senior agent right now.`
         }
       ]
     },
-    firstMessage: `Hi, this is an automated assistant calling on behalf of ${lead.assigned_agent_name || AGENT_NAME} regarding a property that may match your interests. Is this a good time to chat?`,
+    firstMessage: `Hi, this is an automated assistant calling on behalf of ${agentName} regarding a property that may match your interests. Is this a good time to chat?`,
   };
 
   const body = {
@@ -121,14 +126,15 @@ YOUR GOAL:
   }
 }
 // ── Make outbound confirmation call via VAPI ────────────────────────────────────
-async function makeConfirmationCall(visit) {
+async function makeConfirmationCall(visit, agentContext = null) {
   if (!VAPI_API_KEY) return { success: true, simulated: true };
   const { default: fetch } = await import('node-fetch');
+  const agentName = agentContext?.name || AGENT_NAME;
 
   const body = {
     assistantId:   VAPI_ASSISTANT_ID,
     assistantOverrides: {
-      firstMessage: `Hi ${visit.client_name || 'there'}! This is ${AGENT_NAME} from ${COMPANY_NAME}. I am calling to confirm your property visit booking for ${visit.property_name || 'our property'}. I see you booked it for ${visit.visit_date} at ${visit.visit_time}. We are very excited to show you the property! Do you need directions or have any questions about the location?`,
+      firstMessage: `Hi ${visit.client_name || 'there'}! This is ${agentName} from ${COMPANY_NAME}. I am calling to confirm your property visit booking for ${visit.property_name || 'our property'}. I see you booked it for ${visit.visit_date} at ${visit.visit_time}. We are very excited to show you the property! Do you need directions or have any questions about the location?`,
       variableValues: { isConfirmation: 'true', propertyName: visit.property_name },
     },
     phoneNumberId: VAPI_PHONE_NUMBER_ID,
@@ -152,14 +158,15 @@ async function makeConfirmationCall(visit) {
 }
 
 // ── Make outbound reminder call via VAPI ──────────────────────────────────────
-async function makeReminderCall(visit) {
+async function makeReminderCall(visit, agentContext = null) {
   if (!VAPI_API_KEY) return { success: true, simulated: true };
   const { default: fetch } = await import('node-fetch');
+  const agentName = agentContext?.name || AGENT_NAME;
 
   const body = {
     assistantId:   VAPI_ASSISTANT_ID,
     assistantOverrides: {
-      firstMessage: `Hi ${visit.client_name || 'there'}! This is ${AGENT_NAME} from ${COMPANY_NAME}. Just a friendly reminder that your property visit for ${visit.property_name || 'our property'} is scheduled for tomorrow at ${visit.visit_time || 'the confirmed time'}. We are looking forward to seeing you! Do you have any questions before then?`,
+      firstMessage: `Hi ${visit.client_name || 'there'}! This is ${agentName} from ${COMPANY_NAME}. Just a friendly reminder that your property visit for ${visit.property_name || 'our property'} is scheduled for tomorrow at ${visit.visit_time || 'the confirmed time'}. We are looking forward to seeing you! Do you have any questions before then?`,
       variableValues: { isReminder: 'true', propertyName: visit.property_name },
     },
     phoneNumberId: VAPI_PHONE_NUMBER_ID,
@@ -208,7 +215,9 @@ async function listCalls(limit = 20) {
 }
 
 // ── Build assistant config (call once to create your assistant) ───────────────
-function buildAssistantConfig(properties = []) {
+function buildAssistantConfig(properties = [], agentContext = null) {
+  const agentName = agentContext?.name || AGENT_NAME;
+  const companyName = COMPANY_NAME;
   const propertyList = properties.length > 0
     ? properties.slice(0, 15).map((p, i) =>
         `${i+1}. ${p.name || p.title}
@@ -216,12 +225,15 @@ function buildAssistantConfig(properties = []) {
    - Location: ${p.address || p.location || 'N/A'}
    - Price: ${p.price_label || (p.price ? '$' + Number(p.price).toLocaleString() : 'Contact agent')}
    - Features: ${p.bedrooms ? p.bedrooms + ' BR' : ''} ${p.bathrooms ? '· ' + p.bathrooms + ' BA' : ''}
-   - Description: ${p.description ? p.description.substring(0, 100) + '...' : 'Premium property.'}`
+   - Description: ${p.description ? p.description.substring(0, 100) + '...' : 'Premium property.'}
+   - Neighborhood Info: ${p.neighborhood_info || 'N/A'}
+   - Financing Options: ${p.financing_options || 'N/A'}
+   - Key Selling Points: ${p.key_selling_points || 'N/A'}`
       ).join('\n\n')
     : 'Properties will be loaded dynamically from our latest inventory.';
 
   return {
-    name: `${AGENT_NAME} — ${COMPANY_NAME}`,
+    name: `${agentName} — ${companyName}`,
     firstMessageMode: 'assistant-speaks-first',
     model: {
       provider: 'openai',
@@ -229,7 +241,7 @@ function buildAssistantConfig(properties = []) {
       messages: [
         {
           role:    'system',
-          content: `You are ${AGENT_NAME}, a friendly and expert real estate agent at ${COMPANY_NAME}.
+          content: `You are ${agentName}, a friendly and expert real estate agent at ${companyName}.
 You are answering a call from a lead who might be interested in our properties.
 
 OUR CURRENT LISTINGS:
@@ -245,10 +257,11 @@ YOUR PERSONALITY:
 
 YOUR CALL GOALS:
 1. Greet them warmly and introduce the property.
-2. Present the property details, price, and benefits. Be consultative, not robotic.
-3. Explain location intelligence (nearby schools, shopping, hospitals).
-4. Qualify the lead: Ask about their timeline, property type, if for personal use or investment, and if they are actively searching.
-5. Identify their interest level (HOT, WARM, COLD) and move them to the next best step.
+2. Present the property: Explain type, bedrooms, bathrooms, price, key features, and unique selling points. Be consultative, not robotic.
+3. Share location intelligence: Mention nearby schools, shopping centers, companies, transport, and other neighborhood benefits.
+4. Explain financing: Outline purchasing terms, down payment, HOA fees, loan options, and how they can get pre-approved or apply for loans.
+5. Qualify the lead: Ask about their timeline, property type, if for personal use or investment, and if they are actively searching.
+6. Identify their interest level (HOT, WARM, COLD) and move them to the next best step.
    - Do NOT force an appointment booking. Do not keep asking for dates and times unless the lead explicitly requests a visit.
    - If they are HOT (strong interest): Offer to transfer to the agent right now, or send a property link / visit booking link.
    - If they are WARM: Offer to send property information and follow up.
