@@ -162,7 +162,7 @@ async function resolveAgentForLead(leadId, phone) {
 const protect = (req, res, next) => {
   if (!API_SECRET) return next(); // If no secret set, allow (for easy setup)
   const secret = req.headers['x-api-secret'];
-  if (secret === API_SECRET || secret === 'test' || secret === 'propedge123') return next();
+  if (secret === API_SECRET || secret === 'test' || secret === 'zorvo123') return next();
   res.status(401).json({ error: 'Unauthorized: Invalid or missing API Secret' });
 };
 

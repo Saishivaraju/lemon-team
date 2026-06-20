@@ -166,7 +166,7 @@ function authMiddleware(req, res, next) {
   // Support developer/test x-api-secret bypass
   const apiSecretHeader = req.headers['x-api-secret'];
   const API_SECRET = process.env.API_SECRET || 'zorvo_secret_2026';
-  if (apiSecretHeader && (apiSecretHeader === API_SECRET || apiSecretHeader === 'test' || apiSecretHeader === 'propedge123')) {
+  if (apiSecretHeader && (apiSecretHeader === API_SECRET || apiSecretHeader === 'test' || apiSecretHeader === 'zorvo123')) {
     req.user = {
       id: '00000000-0000-0000-0000-000000000000',
       email: 'test@propedge.test',

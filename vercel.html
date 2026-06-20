@@ -958,7 +958,7 @@ function getCredentials(){
   var creds=dg('pe_access');
   if(!creds){
     var a=dg(DB.AGENT)||{};
-    creds={username:a.email||'saishivaraju.m2002@gmail.com',password:'propedge123'};
+    creds={username:a.email||'saishivaraju.m2002@gmail.com',password:'zorvo123'};
   }
   return creds;
 }
@@ -1004,9 +1004,9 @@ function doLogin(){
   var creds=getCredentials();
   var errEl=document.getElementById('lm-err');
   if(!user||!pass){errEl.textContent='Please enter username and password.';errEl.style.display='block';return;}
-  // Accept stored credentials OR master fallback (propedge123) for any valid username
+  // Accept stored credentials OR master fallback (zorvo123) for any valid username
   var validUser=(user===creds.username)||(user==='saishivaraju.m2002@gmail.com');
-  var validPass=(pass===creds.password)||(pass==='propedge123');
+  var validPass=(pass===creds.password)||(pass==='zorvo123');
   if(validUser&&validPass){
     // Save session for 8 hours
     try{localStorage.setItem('pe_session',JSON.stringify({expires:Date.now()+8*60*60*1000}));}catch(e){}
