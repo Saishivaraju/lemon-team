@@ -2986,22 +2986,46 @@
       if (dateEl) { dateEl.value = new Date().toISOString().split('T')[0]; fetchSlots(); }
     }
 
+    // Team leader email — fetched once on init, used for main form submissions
+    var teamLeaderEmail = 'saishivaraju.m2002@gmail.com';
+
     async function syncFromDB() {
       try {
-        const email = 'saishivaraju.m2002@gmail.com';
+        // 1. Fetch unified property list from ALL agents
         const ctrl = new AbortController();
-        const timer = setTimeout(() => ctrl.abort(), 3000);
-        const res = await fetch('/api/sync?email=' + encodeURIComponent(email), {
-          headers: { 'x-api-secret': 'zorvo_secret_2026' },
-          signal: ctrl.signal
-        });
+        const timer = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch('/api/public/properties', { signal: ctrl.signal });
         clearTimeout(timer);
         if (res.ok) {
           const data = await res.json();
-          if (Object.keys(data).length > 0) {
-            if (data['pe_properties']) localStorage.setItem('pe_properties', typeof data['pe_properties'] === 'string' ? data['pe_properties'] : JSON.stringify(data['pe_properties']));
-            if (data['pe_agent']) localStorage.setItem('pe_agent', typeof data['pe_agent'] === 'string' ? data['pe_agent'] : JSON.stringify(data['pe_agent']));
+          if (data.properties && data.properties.length > 0) {
+            localStorage.setItem('pe_properties', JSON.stringify(data.properties));
           }
+        }
+      } catch (e) { /* silent — keep local fallback */ }
+
+      try {
+        // 2. Resolve team leader for main form routing
+        const lr = await fetch('/api/public/team-leader');
+        if (lr.ok) {
+          const ld = await lr.json();
+          if (ld.email) teamLeaderEmail = ld.email;
+        }
+      } catch (e) { /* use default */ }
+
+      try {
+        // 3. Sync current agent profile (for branding)
+        const email = 'saishivaraju.m2002@gmail.com';
+        const ctrl2 = new AbortController();
+        const timer2 = setTimeout(() => ctrl2.abort(), 3000);
+        const res2 = await fetch('/api/sync?email=' + encodeURIComponent(email), {
+          headers: { 'x-api-secret': 'zorvo_secret_2026' },
+          signal: ctrl2.signal
+        });
+        clearTimeout(timer2);
+        if (res2.ok) {
+          const data2 = await res2.json();
+          if (data2['pe_agent']) localStorage.setItem('pe_agent', typeof data2['pe_agent'] === 'string' ? data2['pe_agent'] : JSON.stringify(data2['pe_agent']));
         }
       } catch (e) { }
     }
@@ -3092,10 +3116,17 @@
         var cover = imgs[0] || null;
         var ht = i === 0 ? 500 : 330;
         var ps = JSON.stringify(p).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-        return '<div class="prop-card" onclick="om(\'' + ps + '\')">'
+        var agentBadge = p.listed_by_name
+          ? '<div style="position:absolute;bottom:8px;left:8px;background:rgba(10,14,20,0.82);backdrop-filter:blur(6px);border:1px solid rgba(197,160,89,0.35);border-radius:20px;padding:4px 10px;display:flex;align-items:center;gap:6px;z-index:3">'
+            + '<div style="width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,#c5a059,#8b6914);display:flex;align-items:center;justify-content:center;font-size:10px;color:#0a0e14;font-weight:700;flex-shrink:0">' + p.listed_by_name.charAt(0).toUpperCase() + '</div>'
+            + '<span style="font-size:11px;color:rgba(255,255,255,0.75);white-space:nowrap">Listed by <strong style="color:#c5a059">' + p.listed_by_name + '</strong></span>'
+            + '</div>'
+          : '';
+        return '<div class="prop-card" onclick="om(\'' + ps + '\')" style="position:relative">'
           + (cover ? '<img class="p-img" src="' + cover + '" alt="' + p.name + '" onerror="this.style.display=\'none\'">'
             : '<div class="p-ph" style="height:' + ht + 'px"><i class="fas fa-house-chimney" style="opacity:0.2; font-size:48px"></i></div>')
           + '<div class="p-ov"></div>'
+          + agentBadge
           + (imgs.length > 1 ? '<div class="p-ic">' + imgs.length + ' photos</div>' : '')
           + '<div class="p-cnt">'
           + '<div class="p-badge ' + (sm2[p.status] || 'b-s') + '">' + (sl[p.status] || p.status) + '</div>'
@@ -3110,6 +3141,7 @@
           + '</div></div></div></div>';
       }).join('');
     }
+
     function ds() {
       var q = document.getElementById('sq').value.toLowerCase().trim();
       var s = document.getElementById('ss').value;
@@ -3130,6 +3162,8 @@
     }
     function om(ps) {
       var p; try { p = JSON.parse(ps.replace(/&quot;/g, '"')); } catch (e) { st('Error loading property.', true); return; }
+      // Stamp the listing agent so agent-specific form routes correctly
+      window._currentPropListingAgent = p.listed_by_email || null;
       mImgs = p.images && p.images.length ? p.images : []; mIdx = 0;
       var mi = document.getElementById('mi');
       if (mImgs.length) { mi.src = mImgs[0]; mi.style.display = 'block'; document.querySelector('.m-nav').style.display = mImgs.length > 1 ? 'flex' : 'none'; document.getElementById('mc').textContent = '1 / ' + mImgs.length; }
@@ -3140,6 +3174,7 @@
       document.getElementById('md').textContent = p.description || '';
       document.getElementById('mw').classList.add('open');
     }
+
 
     async function submitLead() {
       const name = document.getElementById('lp-name').value.trim();
@@ -3209,11 +3244,14 @@
 
       const creds2 = JSON.parse(localStorage.getItem('pe_access') || 'null');
       const agentEmail2 = creds2 ? creds2.username : 'saishivaraju.m2002@gmail.com';
-      fetch('/api/leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
-        body: JSON.stringify({ agentEmail: agentEmail2, lead })
-      }).catch(e => console.warn('Lead API Error:', e));
+        // lpop form — agent-specific: route to the listing agent if known
+        const lpopListingAgent = window._currentPropListingAgent || null;
+        fetch('/api/leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
+          body: JSON.stringify({ agentEmail: lpopListingAgent || agentEmail2, lead,
+            ...(lpopListingAgent ? {} : {}) })
+        }).catch(e => console.warn('Lead API Error:', e));
 
       setTimeout(closeLPop, 3000);
     }
@@ -3266,7 +3304,8 @@
       fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-secret': 'zorvo_secret_2026' },
-        body: JSON.stringify({ agentEmail, lead })
+        // Main form → always routes to team leader inbox first
+        body: JSON.stringify({ agentEmail: teamLeaderEmail, lead })
       }).catch(e => console.warn('Lead API Error:', e));
     }
 
@@ -3343,33 +3382,62 @@
     function closeLM() {
       document.getElementById('lm-wrap').classList.remove('open');
     }
-    function doLogin() {
+    async function doLogin() {
       var user = document.getElementById('lm-user').value.trim();
       var pass = document.getElementById('lm-pass').value;
-      var creds = getCredentials();
       var errEl = document.getElementById('lm-err');
       if (!user || !pass) { errEl.textContent = 'Please enter username and password.'; errEl.style.display = 'block'; return; }
-      // Accept stored credentials OR master fallback (zorvo123) for any valid username
-      var validUser = (user === creds.username) || (user === 'saishivaraju.m2002@gmail.com');
-      var validPass = (pass === creds.password) || (pass === 'zorvo123');
-      if (validUser && validPass) {
-        // Save session (localStorage persists across tabs)
-        try { localStorage.setItem('pe_session', JSON.stringify({ expires: Date.now() + 8 * 60 * 60 * 1000 })); } catch (e) { }
-        errEl.style.display = 'none';
-        document.getElementById('lm-form').style.display = 'none';
-        document.getElementById('lm-success').style.display = 'block';
-        var a = dg(DB.AGENT) || {};
-        document.getElementById('lm-welcome-name').textContent = (a.name || 'Agent').split(' ')[0];
-        // Update footer button
-        var btn = document.getElementById('agent-access-btn');
-        var lbl = document.getElementById('aa-label');
-        if (btn) btn.classList.add('logged-in');
-        if (lbl) lbl.textContent = (a.name || 'Agent').split(' ')[0];
-      } else {
-        errEl.textContent = 'Incorrect username or password.';
+      
+      try {
+        const res = await fetch('/api/team/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: user, password: pass })
+        });
+        const data = await res.json();
+        if (data.success) {
+          // Save JWT token
+          localStorage.setItem('zorvo_jwt_token', data.token);
+          
+          // Save pe_access for the sync engine
+          localStorage.setItem('pe_access', JSON.stringify({ username: data.user.email, password: 'zorvo_secret_2026' }));
+          
+          // Save pe_agent profile
+          localStorage.setItem('pe_agent', JSON.stringify({
+            id: data.user.id,
+            name: data.user.name,
+            email: data.user.email,
+            phone: data.user.phone || '',
+            role: data.user.role,
+            team_id: data.user.team_id || data.user.email,
+            agency_name: 'Zorvo Team Properties',
+            website: './index.html',
+            calendar_link: data.user.calendar_link || '',
+            plan: 'Pro Plan'
+          }));
+          
+          // Save pe_session (8 hours expiry)
+          localStorage.setItem('pe_session', JSON.stringify({ expires: Date.now() + 8 * 60 * 60 * 1000 }));
+          
+          errEl.style.display = 'none';
+          document.getElementById('lm-form').style.display = 'none';
+          document.getElementById('lm-success').style.display = 'block';
+          document.getElementById('lm-welcome-name').textContent = data.user.name.split(' ')[0];
+          
+          // Update footer button
+          var btn = document.getElementById('agent-access-btn');
+          var lbl = document.getElementById('aa-label');
+          if (btn) btn.classList.add('logged-in');
+          if (lbl) lbl.textContent = data.user.name.split(' ')[0];
+        } else {
+          errEl.textContent = data.error || 'Incorrect username or password.';
+          errEl.style.display = 'block';
+          document.getElementById('lm-pass').value = '';
+          document.getElementById('lm-pass').focus();
+        }
+      } catch (e) {
+        errEl.textContent = 'Failed to connect to authentication server.';
         errEl.style.display = 'block';
-        document.getElementById('lm-pass').value = '';
-        document.getElementById('lm-pass').focus();
       }
     }
     window.addEventListener('scroll', function () {

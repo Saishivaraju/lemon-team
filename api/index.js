@@ -41,23 +41,30 @@ const { OUTCOMES, classifyOutcome, getRetryPolicy, buildCallResult, formatDurati
 const { scheduleFollowUps, cancelFollowUps, getFollowUpStatus, getAllScheduled, wrapEmail, buildPropertyCards, ctaButton, BASE_URL } = require('../services/followup');
 
 // ── Normalization Utilities
-const { normalizeEmail, normalizePhone, normalizeDate, normalizeTime } = require('../services/normalization');
+// ── Mount Team Edition Routes
+require('../services/teamRoutes')(app);
 
 
 async function triggerAICall(lead) {
   try {
+    const agentContext = await resolveAgentForLead(lead.id || lead.lead_id, lead.phone);
+    const targetEmail = agentContext?.email || AGENT_EMAIL;
+
     // ── Fetch current properties for AI context
     let properties = [];
     try {
-      const snapshot = await DataSnapshot.findOne({ email: AGENT_EMAIL });
+      const snapshot = await DataSnapshot.findOne({ email: targetEmail });
       if (snapshot && snapshot.data && snapshot.data.pe_properties) {
         properties = typeof snapshot.data.pe_properties === 'string'
           ? JSON.parse(snapshot.data.pe_properties)
           : snapshot.data.pe_properties;
+        
+        // Filter out Sold properties from being discussed by AI
+        properties = properties.filter(p => p.status !== 'Sold');
       }
     } catch (e) { console.error('Error fetching properties for outbound:', e.message); }
 
-    const data = await makeOutboundCall({ ...lead, email: lead.email || null }, properties);
+    const data = await makeOutboundCall({ ...lead, email: lead.email || null }, properties, agentContext);
     console.log(`📞 VAPI call triggered → ID: ${data.callId || 'sim'} for ${lead.name}`);
 
     // If successful, we clear any previous retries. 
@@ -74,7 +81,8 @@ async function triggerAICall(lead) {
 
 async function triggerReminderCall(visit) {
   try {
-    const data = await makeReminderCall(visit);
+    const agentContext = await resolveAgentForLead(visit.lead_id, visit.client_phone);
+    const data = await makeReminderCall(visit, agentContext);
     console.log(`⏰ VAPI reminder call → ID: ${data.callId || 'sim'}`);
     return data;
   } catch (err) {
@@ -89,6 +97,66 @@ async function triggerReminderCall(visit) {
 const AGENT_EMAIL = process.env.AGENT_EMAIL || 'saishivaraju.m2002@gmail.com';
 const AGENT_NAME = process.env.AGENT_NAME || 'Sarah Al-Rashid';
 const API_SECRET = process.env.API_SECRET || 'zorvo_secret_2026';
+
+// Resolve target agent context dynamically based on lead identity
+async function resolveAgentForLead(leadId, phone) {
+  const fallback = {
+    name: AGENT_NAME,
+    email: AGENT_EMAIL,
+    phone: process.env.AGENT_PHONE || '+1 707 675 1556'
+  };
+
+  const withTimeout = (promise, ms = 2000, fallbackVal = null) => {
+    return Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(() => resolve(fallbackVal), ms))
+    ]);
+  };
+
+  try {
+    const { createClient } = require('@supabase/supabase-js');
+    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    
+    let lead = null;
+    if (leadId && typeof leadId === 'string' && leadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/)) {
+      const res = await withTimeout(sb.from('team_leads').select('*').eq('id', leadId).single(), 2000, { data: null });
+      if (res && res.data) lead = res.data;
+    }
+
+    if (!lead && phone) {
+      const res = await withTimeout(sb.from('team_leads').select('*').eq('phone', phone).limit(1), 2000, { data: null });
+      if (res && res.data && res.data.length > 0) lead = res.data[0];
+    }
+
+    if (lead && lead.agent_id) {
+      const res = await withTimeout(sb.from('team_members').select('*').eq('id', lead.agent_id).single(), 2000, { data: null });
+      if (res && res.data) {
+        const agent = res.data;
+        return {
+          name: agent.name,
+          email: agent.email,
+          phone: agent.phone || fallback.phone
+        };
+      }
+    }
+
+    if (lead && lead.team_id) {
+      const res = await withTimeout(sb.from('team_members').select('*').eq('email', lead.team_id).single(), 2000, { data: null });
+      if (res && res.data) {
+        const leader = res.data;
+        return {
+          name: leader.name,
+          email: leader.email,
+          phone: leader.phone || fallback.phone
+        };
+      }
+    }
+  } catch (err) {
+    console.error('resolveAgentForLead error:', err.message);
+  }
+
+  return fallback;
+}
 
 // Middleware to protect sensitive routes
 const protect = (req, res, next) => {
@@ -533,6 +601,36 @@ async function notifyAgent(agentEmail, { title, description, type, icon, emailSu
     }
   }
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// PUBLIC ENDPOINTS (no auth required — used by public site)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// GET /api/public/properties — All properties from all agents, with listing agent attribution
+app.get('/api/public/properties', async (req, res) => {
+  try {
+    await connectDB();
+    const { getAllAgentProperties } = require('../services/team');
+    const properties = await getAllAgentProperties(DataSnapshot);
+    res.json({ success: true, count: properties.length, properties });
+  } catch (err) {
+    console.error('GET /api/public/properties error:', err.message);
+    res.status(500).json({ success: false, error: err.message, properties: [] });
+  }
+});
+
+// GET /api/public/team-leader?teamId=... — Returns team leader email for main form routing
+app.get('/api/public/team-leader', async (req, res) => {
+  try {
+    const teamId = req.query.teamId || process.env.TEAM_ID || null;
+    const { getTeamLeader } = require('../services/team');
+    const leader = await getTeamLeader(teamId);
+    res.json({ success: true, email: leader.email, name: leader.name });
+  } catch (err) {
+    console.error('GET /api/public/team-leader error:', err.message);
+    res.json({ success: false, email: process.env.AGENT_EMAIL || 'saishivaraju.m2002@gmail.com', name: 'Team Leader' });
+  }
+});
 
 // ──────────────────────────────────────────────────────────────────────────────
 // INTEGRATION STATUS
@@ -1008,6 +1106,24 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
         (visit.client_phone && b.client_phone === visit.client_phone)
       );
 
+      // Check slot taken in MongoDB fallback (both reschedule and new booking)
+      const requestedSlot = String(visit.visit_time).trim().substring(0, 5);
+
+      const isSlotTaken = bookings.some(b =>
+        String(b.visit_time).trim().substring(0, 5) === requestedSlot &&
+        String(b.visit_date).trim() === String(visit.visit_date).trim() &&
+        (b.status || '').toLowerCase() !== 'cancelled' &&
+        b.id !== (existingMongoVisit ? existingMongoVisit.id : null)
+      );
+      if (isSlotTaken) {
+        throw {
+          status: 409,
+          error: `The ${requestedSlot} slot on ${visit.visit_date} is already booked.`,
+          message: `The ${requestedSlot} slot on ${visit.visit_date} is already booked.`,
+          code: 'SLOT_TAKEN'
+        };
+      }
+
       if (existingMongoVisit) {
         isReschedule = true;
         console.log(`🔄 Enforcing single-visit rule (MongoDB Fallback): Found active visit ${existingMongoVisit.id}. Rescheduling.`);
@@ -1031,9 +1147,10 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
   // --- BACKGROUND PROCESSING ---
   (async () => {
     try {
+      let snapshot = null;
       // Save to MongoDB
       if (mongoose.connection.readyState === 1) {
-        let snapshot = await DataSnapshot.findOne({ email: agentEmail });
+        snapshot = await DataSnapshot.findOne({ email: agentEmail });
         if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: { pe_bookings: [] } });
         let bookings = snapshot.data.pe_bookings || [];
         if (typeof bookings === 'string') { try { bookings = JSON.parse(bookings); } catch (e) { bookings = []; } }
@@ -1249,46 +1366,46 @@ async function processVisitBooking({ agentEmail, visit, is_ai_booking }) {
       if (!is_ai_booking && visit.client_phone) {
         await makeConfirmationCall(visit);
       }
+
+      // ── Update Lead Stage & Dashboard Sync (Moved to Background)
+      let finalLeadId = visit.lead_id;
+      if (!finalLeadId || (typeof finalLeadId === 'string' && !finalLeadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/))) {
+        try {
+          const { createClient } = require('@supabase/supabase-js');
+          const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+          let leadData = null;
+          if (visit.client_phone) {
+            const { data } = await sb.from('team_leads').select('id').eq('phone', visit.client_phone).limit(1);
+            if (data && data.length > 0) leadData = data[0];
+          }
+          if (!leadData && visit.client_email) {
+            const { data } = await sb.from('team_leads').select('id').eq('email', visit.client_email).limit(1);
+            if (data && data.length > 0) leadData = data[0];
+          }
+          if (!leadData && visit.client_phone) {
+            const { data } = await sb.from('leads').select('id').eq('phone', visit.client_phone).limit(1);
+            if (data && data.length > 0) leadData = data[0];
+          }
+          if (!leadData && visit.client_email) {
+            const { data } = await sb.from('leads').select('id').eq('email', visit.client_email).limit(1);
+            if (data && data.length > 0) leadData = data[0];
+          }
+
+          if (leadData) finalLeadId = leadData.id;
+        } catch (e) {
+          console.error('Error finding UUID for stage update:', e.message);
+        }
+      }
+
+      if (finalLeadId) {
+        await robustUpdateLeadStage(finalLeadId, 'Negotiation');
+        await syncLeadToSnapshot(agentEmail, finalLeadId, { pipeline_stage: 'Negotiation', status: 'Negotiation' });
+      }
     } catch (err) {
       console.error('❌ Background Task Error:', err.message);
     }
   })();
-
-  // ── Update Lead Stage & Dashboard Sync
-  let finalLeadId = visit.lead_id;
-  if (!finalLeadId || (typeof finalLeadId === 'string' && !finalLeadId.match(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/))) {
-    try {
-      const { createClient } = require('@supabase/supabase-js');
-      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-
-      let leadData = null;
-      if (visit.client_phone) {
-        const { data } = await sb.from('team_leads').select('id').eq('phone', visit.client_phone).limit(1);
-        if (data && data.length > 0) leadData = data[0];
-      }
-      if (!leadData && visit.client_email) {
-        const { data } = await sb.from('team_leads').select('id').eq('email', visit.client_email).limit(1);
-        if (data && data.length > 0) leadData = data[0];
-      }
-      if (!leadData && visit.client_phone) {
-        const { data } = await sb.from('leads').select('id').eq('phone', visit.client_phone).limit(1);
-        if (data && data.length > 0) leadData = data[0];
-      }
-      if (!leadData && visit.client_email) {
-        const { data } = await sb.from('leads').select('id').eq('email', visit.client_email).limit(1);
-        if (data && data.length > 0) leadData = data[0];
-      }
-
-      if (leadData) finalLeadId = leadData.id;
-    } catch (e) {
-      console.error('Error finding UUID for stage update:', e.message);
-    }
-  }
-
-  if (finalLeadId) {
-    await robustUpdateLeadStage(finalLeadId, 'Negotiation');
-    await syncLeadToSnapshot(agentEmail, finalLeadId, { pipeline_stage: 'Negotiation', status: 'Negotiation' });
-  }
 
   return { success: true, id: realId };
 }
@@ -1742,16 +1859,83 @@ app.post('/api/leads', async (req, res) => {
     if (!agentEmail) agentEmail = process.env.AGENT_EMAIL || 'agent@propedge.test';
 
     if (!lead) return res.status(400).json({ error: 'lead data required' });
-    console.log(`📩 Processing lead for ${agentEmail}: ${lead.name}`);
+
+    // ── ① EARLY AGENT RESOLUTION — must happen before snapshot save, email, followups, and AI call
+    // If the lead carries a specific agentEmail (from agent-specific form), use that directly.
+    // Otherwise fall back to team assignment or environment default.
+    let resolvedAgentEmail = lead.agentEmail || agentEmail;
+    let resolvedAgentContext = {
+      name: AGENT_NAME,
+      email: resolvedAgentEmail,
+      phone: process.env.AGENT_PHONE || '+1 707 675 1556'
+    };
+    const teamId = req.body.teamId || lead.teamId || null;
+    if (teamId) {
+      // Team mode: distribute lead to the least-loaded or location-matched agent
+      try {
+        const { assignLeadToAgent, saveTeamLead } = require('../services/team');
+        const agent = await assignLeadToAgent(lead, teamId);
+        if (agent) {
+          lead.agent_id = agent.id;
+          lead.team_id = teamId;
+          lead.assigned_agent_name = agent.name;
+          lead.assigned_agent_phone = agent.phone;
+          const saved = await saveTeamLead(lead, agent.id, teamId);
+          lead.id = saved.data?.id || null;
+          resolvedAgentEmail = agent.email;
+          resolvedAgentContext = { name: agent.name, email: agent.email, phone: agent.phone || resolvedAgentContext.phone };
+        }
+      } catch (e) { console.error('Team assign error:', e.message); }
+    } else if (!lead.agentEmail) {
+      // Solo/generic form: try to find pre-existing agent from lead record
+      const lookedUp = await resolveAgentForLead(null, lead.phone);
+      if (lookedUp) {
+        resolvedAgentEmail = lookedUp.email;
+        resolvedAgentContext = lookedUp;
+      }
+    }
+    // Stamp the resolved agent onto the lead itself for downstream services
+    lead.agentEmail = resolvedAgentEmail;
+
+    console.log(`📩 Processing lead for ${resolvedAgentEmail}: ${lead.name}`);
 
     let supabaseResult = { success: false, error: 'Not attempted' };
-    try { supabaseResult = await saveLeadToSupabase(lead); }
-    catch (e) { console.error('Supabase Error:', e.message); }
+    try {
+      const { createClient } = require('@supabase/supabase-js');
+      const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+      
+      // Check for existing lead by phone or email
+      let existingLead = null;
+      if (lead.phone) {
+        const { data } = await sb.from('team_leads').select('id').eq('phone', lead.phone).limit(1).single();
+        if (data) existingLead = data;
+      }
+      if (!existingLead && lead.email) {
+        const { data } = await sb.from('team_leads').select('id').eq('email', lead.email).limit(1).single();
+        if (data) existingLead = data;
+      }
+
+      if (existingLead) {
+        lead.id = existingLead.id;
+        const { data, error } = await sb.from('team_leads').update({
+          property_interest: lead.property_interest,
+          source: lead.source || 'Website',
+          updated_at: new Date().toISOString()
+        }).eq('id', existingLead.id).select().single();
+        
+        if (!error) supabaseResult = { success: true, data };
+      } else {
+        supabaseResult = await saveLeadToSupabase(lead);
+        if (supabaseResult.data && supabaseResult.data.id) {
+          lead.id = supabaseResult.data.id;
+        }
+      }
+    } catch (e) { console.error('Supabase Error:', e.message); }
 
     let mongodbSaved = false;
     try {
-      let snapshot = await DataSnapshot.findOne({ email: agentEmail });
-      if (!snapshot) snapshot = new DataSnapshot({ email: agentEmail, data: {} });
+      let snapshot = await DataSnapshot.findOne({ email: resolvedAgentEmail });
+      if (!snapshot) snapshot = new DataSnapshot({ email: resolvedAgentEmail, data: {} });
       if (!snapshot.data) snapshot.data = {};
 
       let leads = snapshot.data.pe_leads || [];
@@ -1782,7 +1966,7 @@ app.post('/api/leads', async (req, res) => {
     try {
       const dashboardUrl = process.env.BASE_URL || 'https://lemon-mocha.vercel.app';
       emailResult = await sendEmail({
-        to: agentEmail,
+        to: resolvedAgentEmail,
         subject: `🔔 New Lead: ${lead.name} — ${lead.property_interest || 'General Inquiry'}`,
         message: `New lead from ${lead.name} (${lead.email || 'no email'}) interested in ${lead.property_interest || 'N/A'}. Log in to your dashboard to take action: ${dashboardUrl}`,
         html: `
@@ -1833,59 +2017,82 @@ app.post('/api/leads', async (req, res) => {
       }
     }
 
-    // ── 📅 Schedule automatic email follow-up drip (Day 0 instant, Day 1, 2, 3)
-    if (lead.phone && lead.email) {
-      // Fetch current properties to include in all drip emails
-      let followupProperties = [];
-      try {
-        const snap = await DataSnapshot.findOne({ email: agentEmail });
-        if (snap?.data?.pe_properties) {
-          followupProperties = typeof snap.data.pe_properties === 'string'
-            ? JSON.parse(snap.data.pe_properties)
-            : snap.data.pe_properties;
-        }
-      } catch (e) { console.error('Followup property fetch error:', e.message); }
-      await scheduleFollowUps(lead, followupProperties);
-    } else if (lead.phone && !lead.email) {
-      // Still register in queue even without email (for cancellation tracking)
-      await scheduleFollowUps(lead, []);
+
+
+    // ── 📅 Check if property is already Sold
+    let allAgentProperties = [];
+    try {
+      const snap = await DataSnapshot.findOne({ email: resolvedAgentEmail });
+      if (snap?.data?.pe_properties) {
+        allAgentProperties = typeof snap.data.pe_properties === 'string'
+          ? JSON.parse(snap.data.pe_properties)
+          : snap.data.pe_properties;
+      }
+    } catch (e) { console.error('Property fetch error:', e.message); }
+
+    let isSoldInquiry = false;
+    let interestTarget = (lead.property_interest || '').toLowerCase();
+    
+    if (interestTarget && allAgentProperties.length > 0) {
+      const matchedProp = allAgentProperties.find(p => p.name && interestTarget.includes(p.name.toLowerCase()));
+      if (matchedProp && matchedProp.status === 'Sold') {
+        isSoldInquiry = true;
+      }
     }
 
-    // ── ⚡ INSTANT AI CALL — triggered within seconds of lead arrival
-    if (lead.phone) {
-      // If teamId provided, assign to agent first (team mode)
-      const teamId = req.body.teamId || null;
-      if (teamId) {
+    if (isSoldInquiry) {
+      console.log(`🛑 Sold property inquiry from ${lead.name} - sending alternative options email`);
+      
+      if (lead.email) {
+        const availableProps = allAgentProperties.filter(p => p.status !== 'Sold').slice(0, 3);
+        const { buildPropertyCards, ctaButton, wrapEmail } = require('../services/followup');
+        const companyName = process.env.COMPANY_NAME || 'Zorvo Realty';
+        const subject = `Update on your property inquiry — ${companyName}`;
+        const message = `Hi ${lead.name},\n\nThe property you inquired about (${lead.property_interest}) has recently been sold. However, we have similar available properties that might match your criteria.\n\nBrowse them here: ${process.env.BASE_URL}`;
+        const html = wrapEmail('Property Update', 'Similar properties available',
+          `<div style="background:rgba(197,160,89,0.07);border:1px solid rgba(197,160,89,0.2);border-radius:10px;padding:20px;margin-bottom:20px">
+            <p style="margin:0 0 8px;font-size:18px;font-weight:600;color:#faf8f4">Hi ${lead.name},</p>
+            <p style="margin:0;font-size:14px;color:rgba(255,255,255,0.6);line-height:1.8">
+              Thank you for your interest in <strong>${lead.property_interest}</strong>. Unfortunately, this property has recently been sold.<br><br>
+              However, we have curated a selection of similar properties that we think you'll love.
+            </p>
+          </div>
+          ${buildPropertyCards(availableProps)}
+          ${ctaButton('Browse All Properties →')}`
+        );
+
+        sendEmail({ to: lead.email, subject, message, html }).catch(e => console.error('Sold email error:', e.message));
+      }
+      
+      // Update status to reflect sold inquiry
+      if (lead.id) {
+        await robustUpdateLeadStage(lead.id, 'closed');
+      }
+    } else {
+      // ── 📅 Schedule automatic email follow-up drip (Day 0 instant, Day 1, 2, 3)
+      if (lead.phone && lead.email) {
+        await scheduleFollowUps(lead, allAgentProperties, resolvedAgentContext);
+      } else if (lead.phone && !lead.email) {
+        // Still register in queue even without email (for cancellation tracking)
+        await scheduleFollowUps(lead, [], resolvedAgentContext);
+      }
+
+      // ── ⚡ INSTANT AI CALL — triggered within seconds of lead arrival
+      if (lead.phone) {
         try {
-          const { assignLeadToAgent, saveTeamLead } = require('../services/team');
-          const agent = await assignLeadToAgent(lead, teamId);
-          if (agent) {
-            lead.id = null; // will be set after saveTeamLead
-            lead.agent_id = agent.id;
-            lead.team_id = teamId;
-            lead.assigned_agent_name = agent.name;
-            lead.assigned_agent_phone = agent.phone;
-            const saved = await saveTeamLead(lead, agent.id, teamId);
-            lead.id = saved.data?.id || null;
+          const aiResult = await triggerAICall(lead);
+          if (aiResult.success) {
+            console.log(`⚡ Instant AI call fired for ${lead.name} (${lead.phone})`);
+          } else {
+            console.error(`❌ Instant AI call failed: ${aiResult.error}`);
           }
         } catch (e) {
-          console.error('Team assign error:', e.message);
+          console.error('AI trigger error:', e.message);
         }
-      }
 
-      try {
-        const aiResult = await triggerAICall(lead);
-        if (aiResult.success) {
-          console.log(`⚡ Instant AI call fired for ${lead.name} (${lead.phone})`);
-        } else {
-          console.error(`❌ Instant AI call failed: ${aiResult.error}`);
-        }
-      } catch (e) {
-        console.error('AI trigger error:', e.message);
+        // 📱 NEW: Cloud Mailbox for Laptop-Free AI
+        pendingLeads.push(lead);
       }
-
-      // 📱 NEW: Cloud Mailbox for Laptop-Free AI
-      pendingLeads.push(lead);
     }
 
     // ── Notify Agent (Dashboard & Email)
@@ -3218,11 +3425,22 @@ app.post('/api/vapi/webhook', async (req, res) => {
             });
           }
 
+          // HOT LEAD ALERT
+          if (leadStatus === 'HOT') {
+            await notifyAgent(targetAgentEmail, {
+              title: `🔥 HOT Lead Alert — ${call.customer?.name || phone}`,
+              description: `AI just spoke to this lead and marked them HOT! Reason: ${statusReason || 'Strong interest detected.'}`,
+              type: 'urgent', icon: '🔥',
+              emailSubject: `🔥 HOT Lead Alert — ${call.customer?.name || phone} is ready to book`
+            });
+          }
+
           // Sync to snapshot
           if (leadId) {
             await syncLeadToSnapshot(targetAgentEmail, leadId, {
               status: leadStatus,
-              pipeline_stage: leadStatus,
+              pipeline_stage: leadStatus === 'HOT' ? 'Qualified' : leadStatus,
+              lead_score: leadStatus === 'HOT' ? 'HOT' : leadStatus === 'WARM' ? 'WARM' : 'COLD',
               callback_time: callback_time || null,
             });
           }
@@ -4243,54 +4461,6 @@ app.post('/api/team/lead-assign', protect, async (req, res) => {
   }
 });
 
-// ── GET /api/team/agents — List all agents for a team ────────────────────────
-app.get('/api/team/agents', protect, async (req, res) => {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    const teamId = req.query.teamId || AGENT_EMAIL;
-    const { data, error } = await sb.from('team_agents').select('*').eq('team_id', teamId);
-    if (error) throw error;
-    res.json({ success: true, agents: data || [] });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── POST /api/team/agents — Add agent to team ─────────────────────────────────
-app.post('/api/team/agents', protect, async (req, res) => {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    const { name, email, phone, coverage_areas, teamId } = req.body;
-    const { data, error } = await sb.from('team_agents').insert([{
-      name, email, phone,
-      coverage_areas: coverage_areas || [],
-      team_id: teamId || AGENT_EMAIL,
-      status: 'active',
-      leads_assigned: 0,
-      created_at: new Date().toISOString(),
-    }]).select().single();
-    if (error) throw error;
-    res.json({ success: true, agent: data });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-// ── DELETE /api/team/agents/:id — Remove agent ────────────────────────────────
-app.delete('/api/team/agents/:id', protect, async (req, res) => {
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-    const { error } = await sb.from('team_agents').delete().eq('id', req.params.id);
-    if (error) throw error;
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 // =============================================================================
 // LEAD PIPELINE — Stage Tracking
 // =============================================================================

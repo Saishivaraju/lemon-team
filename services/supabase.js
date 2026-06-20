@@ -279,7 +279,7 @@ const getTeamAgents = async (teamId) => {
   if (!supabase) return { success: false, data: [] };
   try {
     const { data, error } = await supabase
-      .from('team_agents').select('*').eq('team_id', teamId);
+      .from('team_members').select('*').eq('team_id', teamId).eq('role', 'agent');
     if (error) throw error;
     return { success: true, data };
   } catch (e) {
@@ -293,7 +293,7 @@ const saveCallLogSupabase = async (log) => {
   if (!supabase) return { success: false, error: 'Supabase not configured' };
   try {
     const { data, error } = await supabase
-      .from('call_logs').insert([log]).select().single();
+      .from('team_call_logs').insert([log]).select().single();
     if (error) throw error;
     return { success: true, data };
   } catch (e) {

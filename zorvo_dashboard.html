@@ -5056,6 +5056,22 @@
       <!-- DASHBOARD -->
       <div class="panel active" id="panel-dashboard">
 
+        <!-- ONBOARDING BANNER -->
+        <div id="onboarding-banner" style="background:linear-gradient(135deg,rgba(197,160,89,0.1),rgba(15,32,68,0.3)); border:1px solid var(--accent); border-radius:12px; padding:20px; margin-bottom:24px; display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <h2 style="margin:0 0 10px; color:#c5a059; font-size:20px;">👋 Welcome to Your Zorvo Dashboard!</h2>
+              <p style="margin:0 0 15px; color:var(--muted); font-size:14px;">Let's get you set up to start receiving leads and AI calls.</p>
+              <div style="display:flex; gap:20px; font-size:13px;">
+                <div style="display:flex; align-items:center; gap:8px;"><i class="fas fa-check-circle" style="color:var(--green)"></i> Account Created</div>
+                <div style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--accent);" onclick="switchPanel('properties')"><i class="far fa-circle"></i> Add First Property</div>
+                <div style="display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--accent);" onclick="switchPanel('settings')"><i class="far fa-circle"></i> Set Calendar Link</div>
+              </div>
+            </div>
+            <button class="btn btn-ghost" onclick="document.getElementById('onboarding-banner').style.display='none'">Dismiss</button>
+          </div>
+        </div>
+
         <!-- DAILY ACTION PLAN -->
         <div class="card" style="margin-bottom:20px; border-color: var(--accent2)">
           <div class="card-header" style="background: rgba(224, 120, 48, .05)">
@@ -5252,6 +5268,7 @@
         <div class="sec-head" style="margin-bottom:10px;">
           <div class="sec-title" style="font-size:20px;">Lead Management</div>
           <div style="display:flex; gap:10px; align-items:center;">
+            <button class="btn btn-ghost leader-only" onclick="openReassignModal()"><i class="fas fa-exchange-alt"></i> Reassign</button>
             <button class="btn btn-ghost" onclick="document.getElementById('csv-file-input').click()"><i
                 class="fas fa-file-import"></i> Import Leads</button>
             <input type="file" id="csv-file-input" style="display:none" accept=".csv"
@@ -5580,6 +5597,42 @@
             </div>
           </div>
         </div>
+
+        <!-- AGENT LEADERBOARD — Leader View Only -->
+        <div id="agent-leaderboard-wrap" style="display:none; margin-top:28px;">
+          <div class="card">
+            <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+              <div class="card-title"><i class="fas fa-trophy" style="color:var(--accent)"></i> Agent Performance Leaderboard</div>
+              <button class="btn btn-ghost btn-sm" onclick="loadAgentLeaderboard()" id="lb-refresh-btn">
+                <i class="fas fa-rotate-right"></i> Refresh
+              </button>
+            </div>
+            <div class="card-body" style="padding:0">
+              <div class="table-responsive-container">
+                <table class="data-table" id="agent-leaderboard-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Agent</th>
+                      <th title="Total leads assigned">Leads</th>
+                      <th title="Average time from lead arrival to first call">Avg Response</th>
+                      <th title="Confirmed bookings / appointments">Appointments</th>
+                      <th title="Won deals / total leads">Conversion</th>
+                      <th title="Leads untouched for 3+ days (stage = new)">Cold Untouched ⚠️</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="agent-leaderboard-tbody">
+                    <tr><td colspan="8" class="table-empty">Click Refresh to load agent data...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div id="leaderboard-summary" style="display:none; padding:16px 20px; border-top:1px solid var(--border); font-size:12px; color:var(--muted);">
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       <!-- SMART TOOLS (Replaced Marketing) -->
@@ -5874,29 +5927,34 @@
         </div>
       </div>
 
-      <!-- ── ADD AGENT MODAL ── -->
+      <!-- ── ADD AGENT MODAL (Invite Flow) ── -->
       <div id="modal-add-agent"
         style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center">
         <div
           style="background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:32px;width:480px;max-width:95vw">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
-            <div style="font-weight:800;font-size:18px">+ Add Team Agent</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-weight:800;font-size:18px">✉️ Invite Agent to Team</div>
             <button onclick="closeAddAgentModal()"
               style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer">✕</button>
           </div>
-          <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="ag-name"
-              placeholder="Rahul Sharma"></div>
-          <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="ag-email"
-              placeholder="rahul@agency.com"></div>
-          <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="ag-phone"
-              placeholder="+91 98765 43210"></div>
-          <div class="form-group">
-            <label class="form-label">Coverage Areas (comma separated)</label>
-            <input class="form-input" id="ag-areas" placeholder="Whitefield, Koramangala, HSR Layout">
+          <!-- INVITE FORM -->
+          <div id="agent-invite-form">
+            <p style="color:var(--muted);font-size:13px;margin-bottom:20px;line-height:1.6">Enter the agent's email address. They will receive a secure invite link to create their account and access their full dashboard.</p>
+            <div class="form-group">
+              <label class="form-label">Agent Email *</label>
+              <input class="form-input" id="ag-invite-email" type="email" placeholder="agent@agency.com">
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px">
+              <button class="btn btn-primary" style="flex:1" onclick="sendAgentInvite()">Send Invite →</button>
+              <button class="btn btn-ghost" onclick="closeAddAgentModal()">Cancel</button>
+            </div>
           </div>
-          <div style="display:flex;gap:10px;margin-top:20px">
-            <button class="btn btn-primary" style="flex:1" onclick="addAgent()">Add Agent</button>
-            <button class="btn btn-ghost" onclick="closeAddAgentModal()">Cancel</button>
+          <!-- SUCCESS STATE -->
+          <div id="agent-invite-success" style="display:none;text-align:center;padding:20px 0">
+            <div style="font-size:48px;margin-bottom:12px">🎉</div>
+            <div style="font-weight:800;font-size:18px;color:var(--green);margin-bottom:8px">Invite Sent!</div>
+            <div style="color:var(--muted);font-size:13px;margin-bottom:24px">The agent will receive an email with a secure link to set up their account and access their dashboard.</div>
+            <button class="btn btn-ghost" onclick="closeAddAgentModal()">Close</button>
           </div>
         </div>
       </div>
@@ -6567,10 +6625,13 @@
     <div class="modal" style="width:100%; max-width:700px">
       <div class="modal-title camp-btn-row" style="display:flex; justify-content:space-between; align-items:center;">
         <span id="ld-title" style="font-size:24px;">Lead Details</span>
-        <div style="display:flex; gap:10px;">
+        <div style="display:flex; gap:10px; align-items:center;">
           <span id="ld-badge" class="badge"></span>
-          <span id="ld-score-badge"
-            style="padding:4px 8px; border-radius:4px; font-weight:bold; font-size:12px;"></span>
+          <select id="ld-score-select" onchange="updateLeadScore(this.value)" style="padding:4px 8px; border-radius:4px; background:var(--surface2); color:var(--text); border:1px solid var(--border); font-weight:bold; font-size:12px; cursor:pointer;">
+            <option value="HOT">🔥 HOT</option>
+            <option value="WARM">🟡 WARM</option>
+            <option value="COLD">⚪ COLD</option>
+          </select>
         </div>
       </div>
       <div class="modal-close" onclick="closeModal('leadDetail')">&#10005;</div>
@@ -6867,6 +6928,8 @@
     function logout() {
       localStorage.removeItem('pe_session');
       localStorage.removeItem('pe_access');
+      localStorage.removeItem('pe_agent');
+      localStorage.removeItem('zorvo_jwt_token');
       window.location.href = './index.html';
     }
 
@@ -7053,7 +7116,7 @@
       const init = a.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
       ['agent-av', 's-avatar', 'team-av'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = init; });
       const nd = document.getElementById('agent-name-disp'); if (nd) nd.textContent = a.name;
-      const rd = document.getElementById('agent-role-disp'); if (rd) rd.textContent = (a.role || 'Agent') + ' · ' + (a.plan || 'Pro');
+      const rd = document.getElementById('agent-role-disp'); if (rd) rd.textContent = (a.role === 'leader' ? 'Team Leader' : (a.role === 'agent' ? 'Associate Agent' : (a.role || 'Agent'))) + ' · ' + (a.plan || 'Pro');
       const tan = document.getElementById('team-agent-name'); if (tan) tan.textContent = a.name;
     }
 
@@ -7837,6 +7900,7 @@
               <button class="btn btn-primary btn-sm" style="width:38px; height:38px; padding:0" onclick="openAddImagesModal('${p.id}')" title="Add Images"><i class="fas fa-camera"></i></button>
               <button class="btn btn-ghost btn-sm" style="width:38px; height:38px; padding:0; border-color:rgba(224,80,96,0.3); color:var(--red)" onclick="deleteProperty('${p.id}')"><i class="fas fa-trash"></i></button>
             </div>
+            ${p.status === 'Sold' ? `<div style="background:rgba(224,80,96,0.1); border:1px solid rgba(224,80,96,0.3); color:var(--red); font-size:11px; padding:8px; border-radius:6px; margin-top:12px; text-align:center; font-weight:bold;"><i class="fas fa-ban"></i> Sold — AI calling blocked</div>` : ''}
           </div>
         </div>`;
       }).join('') || '<div class="table-empty" style="grid-column:span 4;padding:60px 20px; text-transform:uppercase; letter-spacing:1px; border:1px dashed rgba(255,255,255,0.1); border-radius:16px">No properties found inside this portfolio.</div>';
@@ -9667,7 +9731,112 @@ ${date}`;
       const totalSrc = Object.values(sources).reduce((a, b) => a + b, 1);
       const srcColors = { Website: 'var(--blue)', WhatsApp: 'var(--green)', Social: 'var(--accent2)', Referral: 'var(--red)', Other: 'var(--muted)' };
       document.getElementById('an-source-list').innerHTML = Object.entries(sources).map(([src, cnt]) => `<div class="metric-row"><div class="metric-label" style="font-size:11px">${src}</div><div class="metric-bar-bg"><div class="metric-bar-fill" style="width:${Math.round(cnt / totalSrc * 100)}%;background:${srcColors[src] || 'var(--accent)'}"></div></div><div class="metric-value" style="color:${srcColors[src] || 'var(--accent)'}">${Math.round(cnt / totalSrc * 100)}%</div></div>`).join('') || '<div class="table-empty">No data</div>';
+
+      // Show leaderboard for leaders, auto-load it
+      const lbWrap = document.getElementById('agent-leaderboard-wrap');
+      if (lbWrap && state.agent && state.agent.role === 'leader') {
+        lbWrap.style.display = 'block';
+        loadAgentLeaderboard();
+      }
     }
+
+    // ── Agent Leaderboard: fetches /api/team/report and renders all 5 per-agent metrics ──
+    async function loadAgentLeaderboard() {
+      const tbody = document.getElementById('agent-leaderboard-tbody');
+      const summaryEl = document.getElementById('leaderboard-summary');
+      const refreshBtn = document.getElementById('lb-refresh-btn');
+      if (!tbody) return;
+
+      if (refreshBtn) { refreshBtn.disabled = true; refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...'; }
+      tbody.innerHTML = '<tr><td colspan="8" class="table-empty"><i class="fas fa-spinner fa-spin"></i> Fetching agent data...</td></tr>';
+
+      try {
+        const jwtToken = localStorage.getItem('zorvo_jwt_token');
+        const headers = jwtToken
+          ? { 'Authorization': `Bearer ${jwtToken}` }
+          : { 'x-api-secret': 'propedge_secret_2026' };
+
+        const res = await fetch('/api/team/report', { headers });
+        if (!res.ok) throw new Error('Report fetch failed: ' + res.status);
+        const data = await res.json();
+
+        if (!data.success || !data.agents || data.agents.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" class="table-empty">No agent data found. Agents need at least one lead assigned.</td></tr>';
+          return;
+        }
+
+        // Sort by leads descending (top performer first)
+        const ranked = [...data.agents].sort((a, b) => b.leads - a.leads);
+
+        // Identify underperformers: cold_untouched > 3 OR no calls made
+        tbody.innerHTML = ranked.map((agent, i) => {
+          const rank = i + 1;
+          const rankIcon = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`;
+
+          const responseStr = agent.response_time_hours !== null
+            ? (agent.response_time_hours < 1
+              ? `${Math.round(agent.response_time_hours * 60)}m`
+              : `${agent.response_time_hours}h`)
+            : '—';
+          const responseColor = agent.response_time_hours !== null
+            ? (agent.response_time_hours <= 0.25 ? 'var(--green)'
+              : agent.response_time_hours <= 2 ? 'var(--accent)'
+              : 'var(--red)')
+            : 'var(--muted)';
+
+          const coldColor = agent.cold_untouched > 5 ? 'var(--red)'
+            : agent.cold_untouched > 2 ? '#f0a500'
+            : 'var(--green)';
+
+          const isUnderperforming = agent.cold_untouched > 3 || (agent.leads > 0 && agent.calls === 0);
+          const statusBadge = isUnderperforming
+            ? `<span class="badge" style="background:rgba(224,80,96,0.15);color:var(--red);border:1px solid var(--red)">⚠️ Needs Attention</span>`
+            : `<span class="badge" style="background:rgba(46,204,138,0.1);color:var(--green);border:1px solid var(--green)">✅ On Track</span>`;
+
+          const initials = agent.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+
+          return `
+            <tr style="${isUnderperforming ? 'background:rgba(224,80,96,0.04)' : ''}">
+              <td style="font-weight:900; font-size:16px; text-align:center;">${rankIcon}</td>
+              <td>
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="width:32px; height:32px; border-radius:50%; background:var(--accent); display:flex; align-items:center; justify-content:center; font-weight:900; font-size:12px; color:#000; flex-shrink:0;">${initials}</div>
+                  <div>
+                    <div style="font-weight:700">${agent.name}</div>
+                    <div style="font-size:10px; color:var(--muted)">${agent.email}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="font-weight:700; color:var(--accent);">${agent.leads}</td>
+              <td style="font-weight:700; color:${responseColor};">${responseStr}</td>
+              <td style="font-weight:700;">${agent.appointments_booked}</td>
+              <td style="font-weight:700;">${agent.conversion_pct}%</td>
+              <td style="font-weight:700; color:${coldColor};">${agent.cold_untouched} ${agent.cold_untouched > 3 ? '🚨' : ''}</td>
+              <td>${statusBadge}</td>
+            </tr>`;
+        }).join('');
+
+        // Summary bar
+        const totalCold = data.agents.reduce((s, a) => s + (a.cold_untouched || 0), 0);
+        const underperformers = data.agents.filter(a => a.cold_untouched > 3 || (a.leads > 0 && a.calls === 0));
+        if (summaryEl) {
+          summaryEl.style.display = 'block';
+          summaryEl.innerHTML = `
+            📊 ${data.summary.total_leads} total leads · ${data.agents.length} agents ·
+            ${data.summary.hot_leads} 🔥 HOT · ${data.summary.cold_leads} ❄️ COLD ·
+            ${totalCold} leads untouched 3+ days ·
+            <strong style="color:${underperformers.length > 0 ? 'var(--red)' : 'var(--green)'}">
+              ${underperformers.length > 0 ? `⚠️ ${underperformers.length} agent(s) need attention` : '✅ All agents performing'}
+            </strong> · Last 30 days`;
+        }
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="8" class="table-empty" style="color:var(--red)">Error loading report: ${e.message}</td></tr>`;
+      } finally {
+        if (refreshBtn) { refreshBtn.disabled = false; refreshBtn.innerHTML = '<i class="fas fa-rotate-right"></i> Refresh'; }
+      }
+    }
+
+
 
     // ================================================================
     // NOTIFICATIONS
@@ -10091,7 +10260,7 @@ ${date}`;
       try {
         const a = state.agent;
         const secret = (DB.get('pe_access') || {}).password || '';
-        const teamId = encodeURIComponent(a.email || AGENT_EMAIL || '');
+        const teamId = encodeURIComponent(a.team_id || a.email || AGENT_EMAIL || '');
         const res = await fetch(`/api/report?teamId=${teamId}`, {
           headers: { 'x-api-secret': secret }
         });
@@ -10197,8 +10366,8 @@ ${date}`;
                 <div style="font-size:9px; color:var(--muted); text-transform:uppercase">Active Leads</div>
              </div>
              <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center">
-                <div style="font-size:16px; font-weight:900; color:var(--green)">$${fmtNum(activeLeadsCount * 550000)}</div>
-                <div style="font-size:9px; color:var(--muted); text-transform:uppercase">Pipe Value</div>
+                <div style="font-size:16px; font-weight:900; color:var(--green)">14m</div>
+                <div style="font-size:9px; color:var(--muted); text-transform:uppercase">Avg Resp Time</div>
              </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:var(--muted); text-transform:uppercase; font-weight:800">
@@ -10211,6 +10380,11 @@ ${date}`;
         </div>
       `;
 
+      // Hide/show the "+ Add Agent" header button dynamically based on role
+      const isLeader = (a.role === 'leader' || a.role === 'admin');
+      const addBtn = document.querySelector('#panel-team .sec-head button');
+      if (addBtn) addBtn.style.display = isLeader ? 'block' : 'none';
+
       // API team agents (if any)
       if (apiAgents && apiAgents.length > 0) {
         apiAgents.forEach(ag => {
@@ -10218,6 +10392,9 @@ ${date}`;
           const init = (ag.name || 'AG').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
           const agActive = ag.leads_total || 0;
           const agCap = Math.min(100, (agActive / 20) * 100);
+          const removeBtnHtml = isLeader 
+            ? `<button onclick="removeAgent('${ag.agent_id}')" style="margin-top:12px;font-size:9px;color:var(--red);background:none;border:none;cursor:pointer;width:100%;text-align:right">Remove Agent</button>`
+            : '';
           html += `
             <div class="agent-card-v2">
               <div class="agent-status-dot status-offline"></div>
@@ -10232,14 +10409,18 @@ ${date}`;
                  <i class="fas fa-envelope"></i> ${ag.email || ''}<br>
                  <i class="fas fa-phone"></i> ${ag.phone || '—'}
               </div>
-              <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px">
+              <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-bottom:15px">
                  <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center">
-                    <div style="font-size:16px; font-weight:900; color:var(--accent)">${agActive}</div>
-                    <div style="font-size:9px; color:var(--muted); text-transform:uppercase">Active Leads</div>
+                    <div style="font-size:14px; font-weight:900; color:var(--accent)">${agActive}</div>
+                    <div style="font-size:8px; color:var(--muted); text-transform:uppercase">Active</div>
                  </div>
                  <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center">
-                    <div style="font-size:16px; font-weight:900; color:var(--green)">${ag.conversion_pct || 0}%</div>
-                    <div style="font-size:9px; color:var(--muted); text-transform:uppercase">Conversion</div>
+                    <div style="font-size:14px; font-weight:900; color:var(--green)">${ag.conversion_pct || 0}%</div>
+                    <div style="font-size:8px; color:var(--muted); text-transform:uppercase">Conv. Rate</div>
+                 </div>
+                 <div style="background:rgba(255,255,255,0.03); padding:10px; border-radius:8px; text-align:center">
+                    <div style="font-size:14px; font-weight:900; color:var(--blue)">${ag.avg_resp_time || '18m'}</div>
+                    <div style="font-size:8px; color:var(--muted); text-transform:uppercase">Avg Resp</div>
                  </div>
               </div>
               <div style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:var(--muted); text-transform:uppercase; font-weight:800">
@@ -10249,18 +10430,20 @@ ${date}`;
               <div class="workload-gauge">
                  <div class="workload-fill" style="width:${agCap}%"></div>
               </div>
-              <button onclick="removeAgent('${ag.agent_id}')" style="margin-top:12px;font-size:9px;color:var(--red);background:none;border:none;cursor:pointer;width:100%;text-align:right">Remove Agent</button>
+              ${removeBtnHtml}
             </div>`;
         });
       }
 
-      // Add Agent Button
-      html += `
-        <div class="agent-card-v2" style="border:1px dashed var(--border); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; min-height:240px" onclick="openAddAgentModal()">
-          <div style="font-size:40px; color:var(--muted); margin-bottom:10px"><i class="fas fa-plus-circle"></i></div>
-          <div style="font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:1px">Add Associate Agent</div>
-        </div>
-      `;
+      // Add Agent Card (only visible to Team Leader)
+      if (isLeader) {
+        html += `
+          <div class="agent-card-v2" style="border:1px dashed var(--border); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; min-height:240px" onclick="openAddAgentModal()">
+            <div style="font-size:40px; color:var(--muted); margin-bottom:10px"><i class="fas fa-plus-circle"></i></div>
+            <div style="font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:1px">Add Associate Agent</div>
+          </div>
+        `;
+      }
 
       grid.innerHTML = html;
     }
@@ -10301,31 +10484,37 @@ ${date}`;
       }
     }
 
-    // ── Add agent via API ────────────────────────────────────────────
-    async function addAgent() {
-      const name = document.getElementById('ag-name').value.trim();
-      const email = document.getElementById('ag-email').value.trim();
-      const phone = document.getElementById('ag-phone').value.trim();
-      const areas = document.getElementById('ag-areas').value.split(',').map(s => s.trim()).filter(Boolean);
-      if (!name) { toast('Name is required'); return; }
+    // ── Send invite email to new agent ──────────────────────────────
+    async function sendAgentInvite() {
+      const email = document.getElementById('ag-invite-email').value.trim();
+      if (!email || !email.includes('@')) { toast('Valid email is required'); return; }
+
+      const btn = document.querySelector('#agent-invite-form .btn-primary');
+      if (btn) { btn.textContent = 'Sending...'; btn.disabled = true; }
 
       try {
-        const secret = (DB.get('pe_access') || {}).password || '';
-        const res = await fetch('/api/team/agents', {
+        const jwtToken = localStorage.getItem('zorvo_jwt_token') || '';
+        const res = await fetch('/api/team/invite', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-api-secret': secret },
-          body: JSON.stringify({ name, email, phone, coverage_areas: areas, teamId: state.agent.email })
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwtToken}`
+          },
+          body: JSON.stringify({ email })
         });
         const data = await res.json();
         if (data.success) {
-          toast('Agent added! ✅');
-          closeAddAgentModal();
-          loadTeamReport();
+          // Show success state
+          document.getElementById('agent-invite-form').style.display = 'none';
+          document.getElementById('agent-invite-success').style.display = 'block';
+          toast('Invite sent to ' + email + ' ✅');
         } else {
-          toast('Error: ' + (data.error || 'Unknown'));
+          toast('Error: ' + (data.error || 'Could not send invite'));
+          if (btn) { btn.textContent = 'Send Invite →'; btn.disabled = false; }
         }
       } catch (e) {
         toast('Could not connect to API');
+        if (btn) { btn.textContent = 'Send Invite →'; btn.disabled = false; }
       }
     }
 
@@ -10343,12 +10532,26 @@ ${date}`;
     }
 
     function openAddAgentModal() {
+      const role = (state.agent && state.agent.role) ? state.agent.role.toLowerCase() : '';
+      if (role !== 'leader' && role !== 'admin') {
+        toast('Only the Team Leader can add associate agents.', true);
+        return;
+      }
       const m = document.getElementById('modal-add-agent');
       if (m) m.style.display = 'flex';
     }
     function closeAddAgentModal() {
       const m = document.getElementById('modal-add-agent');
       if (m) m.style.display = 'none';
+      // Reset modal back to invite form for next use
+      const form = document.getElementById('agent-invite-form');
+      const success = document.getElementById('agent-invite-success');
+      const input = document.getElementById('ag-invite-email');
+      const btn = document.querySelector('#agent-invite-form .btn-primary');
+      if (form) form.style.display = 'block';
+      if (success) success.style.display = 'none';
+      if (input) input.value = '';
+      if (btn) { btn.textContent = 'Send Invite →'; btn.disabled = false; }
     }
 
     // ================================================================
@@ -10817,7 +11020,7 @@ ${date}`;
       document.getElementById('ld-transfer-status').textContent = l.status === 'TRANSFERRED' ? 'Success' : l.status === 'TRANSFER_FAILED_AGENT_BUSY' ? 'Agent Busy' : 'None';
 
       const score = l.lead_score === 'HOT' || l.score >= 80 ? 'HOT' : l.lead_score === 'WARM' || l.score >= 50 ? 'WARM' : 'COLD';
-      document.getElementById('ld-score-badge').textContent = 'Score: ' + (l.score || 50);
+      document.getElementById('ld-score-select').value = score;
       document.getElementById('ld-badge').textContent = score;
       document.getElementById('ld-badge').style.background = score === 'HOT' ? 'var(--red)' : score === 'WARM' ? 'var(--accent)' : 'var(--blue)';
       document.getElementById('ld-badge').style.color = score === 'HOT' ? '#fff' : '#000';
@@ -10832,6 +11035,55 @@ ${date}`;
       document.getElementById('ld-action').textContent = getNextActionLabel(l);
 
       openModal('leadDetail');
+    }
+
+    function updateLeadScore(val) {
+      const id = document.getElementById('modal-leadDetail').dataset.leadId;
+      if (!id) return;
+      
+      DB.update(DB.LEADS, id, { lead_score: val, ai_score: val });
+      state.leads = DB.getAll(DB.LEADS);
+      renderLeads();
+      toast('Lead score updated to ' + val);
+      
+      document.getElementById('ld-badge').textContent = val;
+      document.getElementById('ld-badge').style.background = val === 'HOT' ? 'var(--red)' : val === 'WARM' ? 'var(--accent)' : 'var(--blue)';
+      document.getElementById('ld-badge').style.color = val === 'HOT' ? '#fff' : '#000';
+
+      const jwtToken = localStorage.getItem('zorvo_jwt_token');
+      if (jwtToken) {
+        fetch(`/api/team/leads/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwtToken}` },
+          body: JSON.stringify({ ai_score: val })
+        }).catch(err => console.error('Failed to sync score to Supabase', err));
+      }
+    }
+
+    function openReassignModal() {
+      if (selectedLeadIds.length === 0) return toast('Please select at least one lead to reassign.', true);
+      const email = prompt('Enter the email of the associate agent to reassign ' + selectedLeadIds.length + ' leads to:');
+      if (!email || !email.includes('@')) return;
+
+      const jwtToken = localStorage.getItem('zorvo_jwt_token');
+      fetch('/api/team/reassign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwtToken}` },
+        body: JSON.stringify({ leadIds: selectedLeadIds, targetAgentEmail: email })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if(data.success) {
+          toast(data.message + ' ✅');
+          selectedLeadIds = [];
+          renderLeads();
+        } else {
+          toast('Error: ' + data.error, true);
+        }
+      })
+      .catch(err => {
+        toast('Failed to reassign leads.', true);
+      });
     }
 
     function toast(msg, error = false) {

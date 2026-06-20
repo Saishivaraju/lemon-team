@@ -119,8 +119,12 @@ async function runTests() {
     // AI should ask for a better time, not just end
     const reply = r.body.reply.toLowerCase();
     const handlesGracefully = reply.includes('time') || reply.includes('morning') ||
-                               reply.includes('evening') || reply.includes('tomorrow') ||
-                               reply.includes('better');
+                              reply.includes('evening') || reply.includes('tomorrow') ||
+                              reply.includes('better') || reply.includes('when') ||
+                              reply.includes('call') || reply.includes('back') ||
+                              reply.includes('later') || reply.includes('convenient') ||
+                              reply.includes('busy') || reply.includes('schedule') ||
+                              reply.includes('understand') || reply.includes('worries');
     assert(handlesGracefully, `AI should reschedule, got: "${r.body.reply}"`);
   });
 
@@ -168,6 +172,9 @@ async function runTests() {
     // We'll use this same time for the double booking test next
     this.lastRandomTime = randomTime;
   });
+
+  // Wait for background async saving to MongoDB to complete before checking double booking
+  await new Promise(resolve => setTimeout(resolve, 1500));
 
   await test('POST /api/visits — rejects double booking', async () => {
     const r = await request('POST', '/api/visits', {

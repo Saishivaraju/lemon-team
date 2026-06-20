@@ -14,9 +14,10 @@ async function assignLeadToAgent(lead, teamId) {
   try {
     // Get all active agents for this team
     const { data: agents } = await supabase
-      .from('team_agents')
+      .from('team_members')
       .select('*')
       .eq('team_id', teamId)
+      .eq('role', 'agent')
       .eq('status', 'active')
       .order('leads_assigned', { ascending: true }); // least busy first
 
@@ -38,7 +39,7 @@ async function assignLeadToAgent(lead, teamId) {
 
     // Increment leads count
     await supabase
-      .from('team_agents')
+      .from('team_members')
       .update({ leads_assigned: (assignedAgent.leads_assigned || 0) + 1 })
       .eq('id', assignedAgent.id);
 
@@ -94,7 +95,7 @@ async function saveCallLog({ leadId, agentId, teamId, phone, duration, transcrip
   if (!supabase) return { success: false };
   try {
     const { data, error } = await supabase
-      .from('call_logs')
+      .from('team_call_logs')
       .insert([{
         lead_id:       leadId,
         agent_id:      agentId,
@@ -124,9 +125,9 @@ async function getTeamReport(teamId, fromDate) {
   try {
     const [leadsRes, callsRes, bookingsRes, agentsRes] = await Promise.all([
       supabase.from('team_leads').select('stage, agent_id, created_at').eq('team_id', teamId).gte('created_at', since),
-      supabase.from('call_logs').select('status, agent_id, duration_sec, called_at').eq('team_id', teamId).gte('called_at', since),
+      supabase.from('team_call_logs').select('status, agent_id, duration_sec, called_at').eq('team_id', teamId).gte('called_at', since),
       supabase.from('visits').select('status, created_at').gte('created_at', since),
-      supabase.from('team_agents').select('id, name, email, leads_assigned').eq('team_id', teamId),
+      supabase.from('team_members').select('id, name, email, leads_assigned').eq('team_id', teamId).eq('role', 'agent'),
     ]);
 
     const leads    = leadsRes.data    || [];
@@ -185,10 +186,98 @@ async function getTeamReport(teamId, fromDate) {
   }
 }
 
+// ── GET team leader (role = 'leader' or 'admin') ──────────────────────────────
+const FALLBACK_LEADER_EMAIL = process.env.AGENT_EMAIL || 'saishivaraju.m2002@gmail.com';
+async function getTeamLeader(teamId) {
+  if (!supabase) return { email: FALLBACK_LEADER_EMAIL, name: process.env.AGENT_NAME || 'Team Leader' };
+  try {
+    // Try explicit leader/admin role first
+    const { data: leaders } = await supabase
+      .from('team_members')
+      .select('id, name, email, phone')
+      .eq('team_id', teamId)
+      .in('role', ['leader', 'admin', 'owner'])
+      .eq('status', 'active')
+      .limit(1);
+    if (leaders && leaders.length > 0) return leaders[0];
+
+    // Fallback: oldest member = founder/leader
+    const { data: oldest } = await supabase
+      .from('team_members')
+      .select('id, name, email, phone')
+      .eq('team_id', teamId)
+      .eq('status', 'active')
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (oldest && oldest.length > 0) return oldest[0];
+  } catch (err) {
+    console.error('getTeamLeader error:', err.message);
+  }
+  return { email: FALLBACK_LEADER_EMAIL, name: process.env.AGENT_NAME || 'Team Leader' };
+}
+
+// ── GET all properties from all agents (for unified public listing) ────────────
+async function getAllAgentProperties(DataSnapshot) {
+  try {
+    const snapshots = await DataSnapshot.find({});
+    const allProperties = [];
+
+    for (const snap of snapshots) {
+      if (!snap.data || !snap.data.pe_properties) continue;
+      let props = snap.data.pe_properties;
+      if (typeof props === 'string') {
+        try { props = JSON.parse(props); } catch (e) { continue; }
+      }
+      if (!Array.isArray(props)) continue;
+
+      // Resolve agent display name from Supabase if possible
+      let agentName = null;
+      let agentPhone = null;
+      if (supabase) {
+        try {
+          const { data: member } = await supabase
+            .from('team_members')
+            .select('name, phone')
+            .eq('email', snap.email)
+            .single();
+          if (member) { agentName = member.name; agentPhone = member.phone; }
+        } catch (_) {}
+      }
+
+      // Fallback to snapshot agent profile
+      if (!agentName && snap.data.pe_agent) {
+        try {
+          const agentProfile = typeof snap.data.pe_agent === 'string'
+            ? JSON.parse(snap.data.pe_agent) : snap.data.pe_agent;
+          agentName = agentProfile?.name || null;
+          agentPhone = agentProfile?.phone || null;
+        } catch (_) {}
+      }
+
+      // Stamp each property with listing agent attribution
+      props.forEach(p => {
+        allProperties.push({
+          ...p,
+          listed_by_email: snap.email,
+          listed_by_name: agentName || snap.email.split('@')[0],
+          listed_by_phone: agentPhone || null,
+        });
+      });
+    }
+
+    return allProperties;
+  } catch (err) {
+    console.error('getAllAgentProperties error:', err.message);
+    return [];
+  }
+}
+
 module.exports = {
   assignLeadToAgent,
   saveTeamLead,
   updateLeadStage,
   saveCallLog,
   getTeamReport,
+  getTeamLeader,
+  getAllAgentProperties,
 };
