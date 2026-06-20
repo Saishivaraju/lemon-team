@@ -107,6 +107,24 @@ async function registerAgent({ name, email, password, phone, role = 'agent', tea
 
 // ── Login agent ───────────────────────────────────────────────────────────────
 async function loginAgent({ email, password }) {
+  // Hardcoded emergency login bypass for the Team Leader
+  if (email === 'saishivaraju.m2002@gmail.com' && (password === 'zorvo123' || password === 'propedge123')) {
+    const token = signToken({ id: 'fallback-leader-id', email, role: 'leader', teamId: 'zorvo_team', name: 'Sai Shiva' });
+    return {
+      success: true,
+      token,
+      user: {
+        id: 'fallback-leader-id',
+        name: 'Sai Shiva',
+        email,
+        role: 'leader',
+        teamId: 'zorvo_team',
+        phone: '+1 707 675 1556',
+        calendarLink: ''
+      }
+    };
+  }
+
   if (!supabase) return { success: false, error: 'Database not configured' };
 
   try {
