@@ -478,13 +478,18 @@ module.exports = function mountTeamRoutes(app) {
   app.post('/api/team/assign-lead', async (req, res) => {
     try {
       const db = getDB();
-      const { leadId, teamId, propertyName, propertyId } = req.body;
+      const { leadId, teamId, propertyName, propertyId, targetAgentEmail } = req.body;
       if (!teamId) return res.status(400).json({ error: 'teamId required' });
 
       let assignedAgent = null;
 
+      if (targetAgentEmail) {
+        const { data: agent } = await db.from('team_members').select('*').eq('email', targetAgentEmail).eq('team_id', teamId).single();
+        if (agent) assignedAgent = agent;
+      }
+
       // Option A: Assign to the agent who owns the property
-      if (propertyId || propertyName) {
+      if (!assignedAgent && (propertyId || propertyName)) {
         let propQuery = db.from('team_properties').select('agent_id,team_id');
         if (propertyId) propQuery = propQuery.eq('id', propertyId);
         else propQuery = propQuery.eq('team_id', teamId).ilike('name', `%${propertyName}%`);

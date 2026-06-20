@@ -1648,13 +1648,13 @@ app.get('/api/cron/reminders', async (req, res) => {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // AI REMINDER CALLS — GET /api/cron/reminder-calls
-// Finds visits happening 2 hours from now and places an AI reminder call.
+// Finds visits happening 24 hours from now and places an AI reminder call.
 // Run this every 15 minutes via an external cron or Vercel cron job.
 // ──────────────────────────────────────────────────────────────────────────────
 app.get('/api/cron/reminder-calls', async (req, res) => {
   try {
     const now = new Date();
-    const targetTime = new Date(now.getTime() + 2 * 60 * 60 * 1000); // +2 hours
+    const targetTime = new Date(now.getTime() + 24 * 60 * 60 * 1000); // +24 hours
     const dateStr = targetTime.toISOString().split('T')[0];
     const hourStr = String(targetTime.getHours()).padStart(2, '0');
     const minStr = String(targetTime.getMinutes()).padStart(2, '0');

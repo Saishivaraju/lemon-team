@@ -3037,15 +3037,7 @@
     var agent = {}, props = [], cf = 'all', mImgs = [], mIdx = 0, mapInited = false, sm = null;
     async function init() {
       syncFromDB().catch(() => { }); // non-blocking background sync
-      if (!da(DB.PROPERTIES).length) {
-        var demoProps = [
-          { name: 'Skyview Residences', address: 'Downtown, Dubai', price: 1200000, bedrooms: '3', bathrooms: '2', area_sqft: 2100, status: 'For Sale', emoji: 'Apartment', views: 234, description: "Masterpiece of modern architecture set against Dubai's skyline.", images: ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&q=80', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80'], latitude: 25.2048, longitude: 55.2708 },
-          { name: 'Marina Tower Suite', address: 'Dubai Marina', price: 850000, bedrooms: '2', bathrooms: '2', area_sqft: 1450, status: 'For Sale', emoji: 'Apartment', views: 189, description: 'Uninterrupted sea views with wraparound balcony.', images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=80', 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=600&q=80'], latitude: 25.0804, longitude: 55.1403 },
-          { name: 'Palm Villa Estate', address: 'Palm Jumeirah', price: 2400000, bedrooms: '5+', bathrooms: '5+', area_sqft: 6800, status: 'Pending', emoji: 'Villa', views: 312, description: 'Extraordinary beachfront villa with private beach and infinity pool.', images: ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&q=80', 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80', 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&q=80', 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80'], latitude: 25.1124, longitude: 55.1390 },
-          { name: 'Downtown Loft', address: 'Business Bay', price: 420000, bedrooms: '1', bathrooms: '1', area_sqft: 750, status: 'Sold', emoji: 'Apartment', views: 145, description: 'Sophisticated urban loft in the heart of Business Bay.', images: ['https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=600&q=80'], latitude: 25.1901, longitude: 55.2643 }
-        ];
-        demoProps.forEach(function (p) { di(DB.PROPERTIES, p); });
-      }
+      // No demo properties injected. Empty state on fresh load.
       agent = dg(DB.AGENT) || { name: 'Sai Shiva', email: 'saishivaraju.m2002@gmail.com', phone: '+91 000 000 0000', agency_name: 'Zorvo Realty', license_number: 'RE-2026-00000' };
       props = da(DB.PROPERTIES);
       // Ensure bookings array exists

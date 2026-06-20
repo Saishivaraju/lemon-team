@@ -5677,6 +5677,30 @@
             </div>
           </div>
 
+          <!-- CAMPAIGN LEAD DISTRIBUTION (Leader Only) -->
+          <div class="card leader-only" id="campaign-dist-card" style="display:none">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-bullhorn"></i> Campaign Lead Distribution</div>
+            </div>
+            <div class="card-body">
+              <p style="font-size:12px; color:var(--muted); margin-bottom:15px">Mass-assign campaign leads to specific team agents. Select multiple leads and choose an agent to assign them to.</p>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:15px; margin-bottom:20px">
+                <div>
+                  <label class="form-label">Select Leads <span style="color:var(--accent);font-size:10px">(Hold Ctrl/Cmd for multiple)</span></label>
+                  <select id="campaign-lead-select" class="form-input" multiple style="height:140px;font-size:12px"></select>
+                </div>
+                <div>
+                  <label class="form-label">Assign To Agent</label>
+                  <select id="campaign-agent-select" class="form-input">
+                    <option value="">Select Agent...</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="distributeCampaignLeads()" id="btn-campaign-dist">
+                <i class="fas fa-share"></i> Distribute Selected Leads
+              </button>
+            </div>
+          </div>
 
 
           <!-- MASS FOLLOW-UP -->
@@ -6883,14 +6907,7 @@
       },
 
       seedDemo() {
-        [
-          { name: 'Skyview Residences', address: 'Downtown, Dubai', price: 1200000, bedrooms: '3', bathrooms: '2', area_sqft: 2100, status: 'For Sale', emoji: 'Apartment', views: 234, description: 'Masterpiece of modern architecture set against Dubai\'s skyline.', images: ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&q=80', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80'], latitude: 25.2048, longitude: 55.2708 },
-          { name: 'Marina Tower Suite', address: 'Dubai Marina', price: 850000, bedrooms: '2', bathrooms: '2', area_sqft: 1450, status: 'For Sale', emoji: 'Apartment', views: 189, description: 'Uninterrupted sea views with wraparound balcony.', images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=80', 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=600&q=80'], latitude: 25.0804, longitude: 55.1403 },
-          { name: 'Palm Villa Estate', address: 'Palm Jumeirah', price: 2400000, bedrooms: '5+', bathrooms: '5+', area_sqft: 6800, status: 'Pending', emoji: 'Villa', views: 312, description: 'Extraordinary beachfront villa with private beach and infinity pool.', images: ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&q=80', 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80', 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&q=80', 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80'], latitude: 25.1124, longitude: 55.1390 },
-          { name: 'Downtown Loft', address: 'Business Bay', price: 420000, bedrooms: '1', bathrooms: '1', area_sqft: 750, status: 'Sold', emoji: 'Apartment', views: 145, description: 'Sophisticated urban loft in the heart of Business Bay.', images: ['https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=600&q=80'], latitude: 25.1901, longitude: 55.2643 },
-        ].forEach(p => this.insert(this.PROPERTIES, p));
-
-        toast('System Seeded with Demo Data! <i class="fas fa-rocket"></i>');
+        toast('Demo data injection has been disabled. System is starting fresh.');
       },
 
       // Seed default agent if none
@@ -6904,21 +6921,10 @@
           // No mock leads injected. Start with a clean slate for real data.
         }
         if (!this.getAll(this.PROPERTIES).length) {
-          const props = [
-            { name: 'Skyview Residences', address: 'Downtown, Dubai', price: 1200000, bedrooms: '3', bathrooms: '2', area_sqft: 2100, status: 'For Sale', emoji: 'Apartment', views: 234, description: 'Masterpiece of modern architecture set against Dubai\'s skyline.', images: ['https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?w=600&q=80', 'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=600&q=80', 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?w=600&q=80'], latitude: 25.2048, longitude: 55.2708 },
-            { name: 'Marina Tower Suite', address: 'Dubai Marina', price: 850000, bedrooms: '2', bathrooms: '2', area_sqft: 1450, status: 'For Sale', emoji: 'Apartment', views: 189, description: 'Uninterrupted sea views with wraparound balcony.', images: ['https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=600&q=80', 'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=600&q=80'], latitude: 25.0804, longitude: 55.1403 },
-            { name: 'Palm Villa Estate', address: 'Palm Jumeirah', price: 2400000, bedrooms: '5+', bathrooms: '5+', area_sqft: 6800, status: 'Pending', emoji: 'Villa', views: 312, description: 'Extraordinary beachfront villa with private beach and infinity pool.', images: ['https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=600&q=80', 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?w=600&q=80', 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=600&q=80', 'https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=600&q=80'], latitude: 25.1124, longitude: 55.1390 },
-            { name: 'Downtown Loft', address: 'Business Bay', price: 420000, bedrooms: '1', bathrooms: '1', area_sqft: 750, status: 'Sold', emoji: 'Apartment', views: 145, description: 'Sophisticated urban loft in the heart of Business Bay.', images: ['https://images.unsplash.com/photo-1502672023488-70e25813eb80?w=600&q=80'], latitude: 25.1901, longitude: 55.2643 },
-          ].map(p => { p.id = p.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6); return p; });
-          this.set(this.PROPERTIES, props);
+          // No mock properties injected. Start fresh.
         }
         if (!this.getAll(this.NOTIFICATIONS).length) {
-          const notifs = [
-            { title: 'New Lead: Omar Al-Farsi', description: 'Interested in 3BR Villa · Palm District', type: 'lead', icon: 'fas fa-user-plus', is_read: false },
-            { title: 'Tour Request: Aisha Khalid', description: 'Wants to visit Palm Villa Estate · Today 2:00 PM', type: 'booking', icon: 'fas fa-calendar-check', is_read: false },
-            { title: 'Deal Closed: Ali Hassan', description: 'Skyview 3BR closed at $920,000', type: 'deal', icon: 'fas fa-handshake', is_read: true },
-          ].map(n => { n.id = n.id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6); return n; });
-          this.set(this.NOTIFICATIONS, notifs);
+          // No mock notifications injected. Start fresh.
         }
         // Removed this.sync() to prevent DB wipe on new session
       },
@@ -10433,6 +10439,22 @@ ${date}`;
               ${removeBtnHtml}
             </div>`;
         });
+        
+        // Populate campaign agent select for leader
+        if (isLeader) {
+          const caSelect = document.getElementById('campaign-agent-select');
+          if (caSelect) {
+            let opts = `<option value="">Select Agent...</option>`;
+            apiAgents.forEach(ag => {
+              opts += `<option value="${ag.email}">${ag.name} (${ag.email})</option>`;
+            });
+            caSelect.innerHTML = opts;
+            
+            // Show the campaign dist card if leader
+            const cCard = document.getElementById('campaign-dist-card');
+            if (cCard) cCard.style.display = 'block';
+          }
+        }
       }
 
       // Add Agent Card (only visible to Team Leader)
@@ -10668,6 +10690,16 @@ ${date}`;
       if (document.getElementById('opt-sms')) document.getElementById('opt-sms').checked = opts.sms;
       if (document.getElementById('opt-whatsapp')) document.getElementById('opt-whatsapp').checked = opts.whatsapp;
       if (document.getElementById('opt-auto')) document.getElementById('opt-auto').checked = opts.auto;
+      
+      // Populate Manual Follow-up and Campaign Dist selects
+      let followupOpts = '';
+      let campaignOpts = '';
+      state.leads.forEach(l => {
+        if (l.email) followupOpts += `<option value="${l.id}">${l.name} (${l.email})</option>`;
+        campaignOpts += `<option value="${l.id}">${l.name} ${l.email ? '(' + l.email + ')' : ''}</option>`;
+      });
+      const el4 = document.getElementById('manual-followup-lead-select'); if (el4) el4.innerHTML = followupOpts;
+      const elCamp = document.getElementById('campaign-lead-select'); if (elCamp) elCamp.innerHTML = campaignOpts;
     }
 
     // Global scope function moved up
@@ -12047,6 +12079,46 @@ ${date}`;
       window._currentTourLeadId = leadId;
       window._currentTourMapLink = `https://www.google.com/maps/dir/${mapQuery}`;
       window._currentTourLeadPhone = lead.phone;
+    }
+
+    async function distributeCampaignLeads() {
+      const selectEl = document.getElementById('campaign-lead-select');
+      const agentEmail = document.getElementById('campaign-agent-select').value;
+      const btn = document.getElementById('btn-campaign-dist');
+
+      if (!agentEmail) return toast('Please select an agent to assign the leads to.', true);
+
+      const selectedIds = Array.from(selectEl.selectedOptions).map(opt => opt.value);
+      if (selectedIds.length === 0) return toast('Please select at least one lead.', true);
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Distributing...';
+
+      let successCount = 0;
+      let errorCount = 0;
+      const jwtToken = localStorage.getItem('zorvo_jwt_token');
+      const teamId = state.agent.team_id || state.agent.email;
+
+      for (const leadId of selectedIds) {
+        try {
+          const res = await fetch('/api/team/assign-lead', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwtToken}` },
+            body: JSON.stringify({ leadId, teamId, targetAgentEmail: agentEmail })
+          });
+          if (res.ok) successCount++;
+          else errorCount++;
+        } catch (e) {
+          errorCount++;
+        }
+      }
+
+      toast(`Distributed ${successCount} leads successfully.` + (errorCount ? ` ${errorCount} failed.` : ''));
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-share"></i> Distribute Selected Leads';
+
+      // Refresh team stats
+      loadTeamReport();
     }
 
     async function sendMassFollowUp() {
